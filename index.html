@@ -1,302 +1,2122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>پورتال جلسات و هدایت پایان‌نامه</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سامانه جامع گزارش کار و پیگیری پایان‌نامه</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- کتابخانه رسمی Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: 'Vazirmatn', sans-serif; }
+    body { font-family: 'Vazirmatn', sans-serif; background-color: #f4f5f9; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c7cbe0; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a9aed4; }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    .animate-modal { animation: 0.2s ease-out modalIn; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="text-slate-800 antialiased">
+  <div id="root"></div>
 
-  <!-- بخش ورود (Authentication) -->
-  <div id="auth-section" class="flex min-h-screen items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
-      <div class="text-center mb-6">
-        <h1 class="text-2xl font-bold text-slate-900">پورتال پیگیری پایان‌نامه</h1>
-        <p class="text-sm text-slate-500 mt-2">ورود مشترک استاد راهنما و دانشجو</p>
-      </div>
-      <form id="login-form" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">ایمیل کاربری</label>
-          <input type="email" id="email" required dir="ltr" placeholder="example@gmail.com" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">رمز عبور</label>
-          <input type="password" id="password" required dir="ltr" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-        </div>
-        <button type="submit" id="login-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition duration-200">
-          ورود به سامانه
-        </button>
-        <p id="auth-error" class="text-rose-500 text-xs text-center hidden"></p>
-      </form>
-    </div>
-  </div>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
 
-  <!-- داشبورد اصلی (پس از ورود موفق) -->
-  <div id="app-section" class="hidden">
-    <!-- نوار بالا -->
-    <header class="bg-white border-b sticky top-0 z-10">
-      <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-          <h2 class="font-bold text-slate-800 text-lg">جلسات و پیشرفت پایان‌نامه</h2>
-        </div>
-        <div class="flex items-center gap-4">
-          <span id="user-display" class="text-xs bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 font-mono" dir="ltr"></span>
-          <button onclick="handleLogout()" class="text-xs text-rose-600 hover:text-rose-700 font-medium">خروج</button>
-        </div>
-      </div>
-    </header>
-
-    <main class="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-      <!-- ستون ثبت جلسه جدید -->
-      <div class="md:col-span-1">
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-24">
-          <h3 class="font-bold text-slate-800 mb-4 pb-2 border-b">ثبت صورت‌جلسه جدید</h3>
-          <form id="meeting-form" class="space-y-4">
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">تاریخ جلسه</label>
-              <input type="text" id="m-date" placeholder="۱۴۰۴/۰۸/۰۵" required class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">موضوع / محور گفتگو</label>
-              <input type="text" id="m-title" placeholder="بررسی ادبیات تحقیق و مدل‌سازی" required class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">خلاصه گزارش و کارهای انجام‌شده</label>
-              <textarea id="m-summary" rows="3" required placeholder="شرح کارهایی که تا این جلسه تکمیل شده..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">تکالیف و اهداف جلسه بعدی</label>
-              <textarea id="m-tasks" rows="2" placeholder="موارد مشخص‌شده برای جلسه آینده..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">لینک فایل / پیش‌نویس (Google Drive، Overleaf و...)</label>
-              <input type="url" id="m-link" dir="ltr" placeholder="https://..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500">
-            </div>
-            <button type="submit" id="save-meeting-btn" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium py-2.5 rounded-lg transition">
-              ذخیره در دیتابیس آنلاین
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- ستون تاریخچه جلسات -->
-      <div class="md:col-span-2 space-y-4">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-bold text-slate-800">تاریخچه جلسات و ارزیابی‌ها</h3>
-          <button onclick="fetchMeetings()" class="text-xs text-indigo-600 hover:underline">بروزرسانی لیست</button>
-        </div>
-
-        <div id="loading" class="text-center py-12 text-slate-400 text-sm">در حال دریافت داده‌ها...</div>
-        <div id="meetings-list" class="space-y-4"></div>
-      </div>
-    </main>
-  </div>
-
-  <script>
-    // اطلاعات اختصاصی پروژه و دسترسی دیتابیس Supabase
+    // -------------------------------------------------------------------------
+    // تنظیمات اتصال به دیتابیس آنلاین Supabase شما
+    // -------------------------------------------------------------------------
     const SUPABASE_URL = "https://lyawmmkqulaetesdcxzn.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_sE2ZYOMNRbaEUW7JTbwLCQ_-Yih9NBI";
-
-    // ساخت کلاینت پایگاه داده
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const authSection = document.getElementById('auth-section');
-    const appSection = document.getElementById('app-section');
-    const loginForm = document.getElementById('login-form');
-    const authError = document.getElementById('auth-error');
-    const userDisplay = document.getElementById('user-display');
-    const meetingsList = document.getElementById('meetings-list');
-    const loading = document.getElementById('loading');
+    // -------------------------------------------------------------------------
+    // توابع تبدیل تاریخ میلادی و شمسی (جلالی) و اعداد فارسی
+    // -------------------------------------------------------------------------
+    const JALALI_MONTHS = ["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
+    const toFaDigits = (n) => String(n ?? "").replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]);
+    const pad2 = (n) => String(n).padStart(2, "0");
 
-    // بررسی وضعیت نشست کاربر
-    async function checkUser() {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (session) {
-        showApp(session.user);
-      } else {
-        showAuth();
+    function gregorianToJalali(gy, gm, gd) {
+      const g_d_m = [0,31,59,90,120,151,181,212,243,273,304,334];
+      let jy = gy <= 1600 ? 0 : 979;
+      gy -= gy <= 1600 ? 621 : 1600;
+      const gy2 = gm > 2 ? gy + 1 : gy;
+      let days = 365 * gy + Math.trunc((gy2 + 3) / 4) - Math.trunc((gy2 + 99) / 100) + Math.trunc((gy2 + 399) / 400) - 80 + gd + g_d_m[gm - 1];
+      jy += 33 * Math.trunc(days / 12053);
+      days %= 12053;
+      jy += 4 * Math.trunc(days / 1461);
+      days %= 1461;
+      jy += Math.trunc((days - 1) / 365);
+      if (days > 365) days = (days - 1) % 365;
+      const jm = days < 186 ? 1 + Math.trunc(days / 31) : 7 + Math.trunc((days - 186) / 30);
+      const jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+      return [jy, jm, jd];
+    }
+
+    function jalaliToGregorian(jy, jm, jd) {
+      let gy = jy <= 979 ? 621 : 1600;
+      jy -= jy <= 979 ? 0 : 979;
+      let days = 365 * jy + Math.trunc(jy / 33) * 8 + Math.trunc((jy % 33 + 3) / 4) + 78 + jd + (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+      gy += 400 * Math.trunc(days / 146097);
+      days %= 146097;
+      if (days > 36524) {
+        gy += 100 * Math.trunc(--days / 36524);
+        days %= 36524;
+        if (days >= 365) days++;
+      }
+      gy += 4 * Math.trunc(days / 1461);
+      days %= 1461;
+      gy += Math.trunc((days - 1) / 365);
+      if (days > 365) days = (days - 1) % 365;
+      let gd = days + 1;
+      const sal_a = [0,31,(gy%4===0 && gy%100!==0) || gy%400===0 ? 29 : 28,31,30,31,30,31,31,30,31,30,31];
+      let gm = 0;
+      for (gm = 0; gm < 13 && gd > sal_a[gm]; gm++) gd -= sal_a[gm];
+      return `${gy}-${pad2(gm)}-${pad2(gd)}`;
+    }
+
+    function formatJalali(isoStr) {
+      if (!isoStr) return "—";
+      try {
+        const parts = isoStr.slice(0, 10).split("-").map(Number);
+        if (parts.length !== 3 || isNaN(parts[0])) return isoStr;
+        const [jy, jm, jd] = gregorianToJalali(parts[0], parts[1], parts[2]);
+        return `${toFaDigits(jd)} ${JALALI_MONTHS[jm - 1]} ${toFaDigits(jy)}`;
+      } catch {
+        return isoStr;
       }
     }
 
-    function showAuth() {
-      authSection.classList.remove('hidden');
-      appSection.classList.add('hidden');
+    function uid() {
+      return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
     }
 
-    function showApp(user) {
-      authSection.classList.add('hidden');
-      appSection.classList.remove('hidden');
-      userDisplay.innerText = user.email;
-      fetchMeetings();
+    function todayIso() {
+      return new Date().toISOString().slice(0, 10);
     }
 
-    // ورود
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      const btn = document.getElementById('login-btn');
-      
-      btn.disabled = true;
-      btn.innerText = 'در حال اعتبارسنجی...';
-      authError.classList.add('hidden');
-
-      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
-      btn.disabled = false;
-      btn.innerText = 'ورود به سامانه';
-
-      if (error) {
-        authError.innerText = 'اطلاعات ورود اشتباه است یا کاربر تعریف نشده است.';
-        authError.classList.remove('hidden');
-      } else {
-        showApp(data.user);
-      }
-    });
-
-    // خروج
-    async function handleLogout() {
-      await sbClient.auth.signOut();
-      showAuth();
+    // -------------------------------------------------------------------------
+    // داده‌های اولیه پیش‌فرض (جلسه اول شما + ساختار فصول)
+    // -------------------------------------------------------------------------
+    function getInitialData() {
+      const addDays = (d) => {
+        const dt = new Date();
+        dt.setDate(dt.getDate() + d);
+        return dt.toISOString().slice(0, 10);
+      };
+      const s1Id = "session-1-init";
+      return {
+        meta: {
+          title: "گزارش کار پایان‌نامه",
+          student: "سید صادق میرزابابایی",
+          advisor: "استاد راهنما",
+          startDate: addDays(-30),
+          targetDate: addDays(150)
+        },
+        sessions: [
+          {
+            id: s1Id,
+            title: "جلسه ۱ — تعیین موضوع",
+            date: "2026-10-08",
+            nextDate: "",
+            type: "حضوری",
+            summary: `در جلسه اول، موضوع پیشنهادی پژوهش بررسی شد و استاد راهنما آن را موضوعی مناسب و قابل‌پیگیری ارزیابی کردند. تأکید شد که پژوهش با دیدی باز و انعطاف‌پذیر پیش برود تا در مراحل تعریف و مدل‌سازی مسئله با بن‌بست یا محدودیت مواجه نشویم.\n\nبرای روشن‌شدن دقیق مسئله، قرار شد یک طرح مسئله مختصر و شفاف نوشته شود. همچنین قرار شد چند مقاله خارجی مرتبط در همین حوزه مطالعه و خلاصه‌سازی شود و بر اساس آن‌ها، نوع و ماهیت مسئله پژوهش و رویکرد مناسب برای حل آن مشخص گردد.\n\nدر پایان، استاد راهنما به کار یکی از دانشجویان در حوزه صنعتی اشاره کردند که پیش‌تر روی موضوعی مشابه کار کرده است؛ قرار شد این کار به‌عنوان نمونه معرفی و بررسی شود.`,
+            decisions: "تدوین طرح مسئله؛ مطالعه چند مقاله خارجی؛ مشخص‌کردن نوع مسئله؛ بررسی کار مشابه یک دانشجو در حوزه صنعتی",
+            feedback: "",
+            questions: [],
+            fileLink: "",
+            createdAt: new Date().toISOString()
+          }
+        ],
+        actions: [
+          { id: "act-1", sessionId: s1Id, title: "تدوین طرح مسئله شفاف (ابعاد، متغیرها، چارچوب)", done: false, owner: "من", dueDate: "", response: "" },
+          { id: "act-2", sessionId: s1Id, title: "مطالعه و خلاصه‌برداری از چند مقاله خارجی مرتبط", done: false, owner: "من", dueDate: "", response: "" },
+          { id: "act-3", sessionId: s1Id, title: "مشخص‌کردن نوع مسئله و رویکرد احتمالی حل", done: false, owner: "من", dueDate: "", response: "" },
+          { id: "act-4", sessionId: s1Id, title: "معرفی کار (داوری) یکی از دانشجویان حوزه صنعتی که روی موضوع مشابه کار کرده است", done: false, owner: "استاد", dueDate: "", response: "" }
+        ],
+        chapters: [
+          { id: "ch-1", title: "فصل اول: کلیات پژوهش", progress: 0, wordTarget: 4000, wordCount: 0, status: "شروع نشده", notes: "" },
+          { id: "ch-2", title: "فصل دوم: مبانی نظری و پیشینه", progress: 0, wordTarget: 8000, wordCount: 0, status: "شروع نشده", notes: "" },
+          { id: "ch-3", title: "فصل سوم: روش‌شناسی و مدل‌سازی", progress: 0, wordTarget: 5000, wordCount: 0, status: "شروع نشده", notes: "" },
+          { id: "ch-4", title: "فصل چهارم: تجزیه و تحلیل یافته‌ها", progress: 0, wordTarget: 6000, wordCount: 0, status: "شروع نشده", notes: "" },
+          { id: "ch-5", title: "فصل پنجم: نتیجه‌گیری و پیشنهادات", progress: 0, wordTarget: 3000, wordCount: 0, status: "شروع نشده", notes: "" }
+        ],
+        framework: [
+          {
+            id: "fw-1",
+            title: "ساختار کلی پایان‌نامه",
+            done: false,
+            children: [
+              { id: "fw-1-1", title: "مقدمه و بیان مسئله", done: true, children: [] },
+              { id: "fw-1-2", title: "اهداف و سوالات پژوهش", done: true, children: [] },
+              { id: "fw-1-3", title: "مرور ادبیات و پیشینه پژوهش", done: false, children: [] },
+              { id: "fw-1-4", title: "مدل‌سازی ریاضی / روش تحقیق", done: false, children: [] }
+            ]
+          }
+        ],
+        notes: [
+          { id: "note-1", title: "ایده‌های تکمیلی", content: "بررسی امکان افزودن یک مطالعه موردی واقعی در فصل چهارم.", tag: "ایده", pinned: true, updatedAt: new Date().toISOString() }
+        ],
+        milestones: [
+          { id: "ms-1", title: "تصویب پروپوزال", date: addDays(-20), done: true, description: "" },
+          { id: "ms-2", title: "تحویل فصل اول و دوم", date: addDays(25), done: false, description: "" },
+          { id: "ms-3", title: "مدل‌سازی و تحویل فصل سوم", date: addDays(65), done: false, description: "" },
+          { id: "ms-4", title: "تکمیل نسخه نهایی", date: addDays(130), done: false, description: "" },
+          { id: "ms-5", title: "جلسه دفاع", date: addDays(150), done: false, description: "" }
+        ],
+        defense: {
+          date: addDays(150),
+          location: "سالن دفاعیه دانشکده",
+          checklist: [
+            { id: "df-1", title: "تکمیل اسلایدهای ارائه دفاع", done: false },
+            { id: "df-2", title: "هماهنگی تاریخ با استاد راهنما و داوران", done: false },
+            { id: "df-3", title: "دفاع آزمایشی (دمو)", done: false },
+            { id: "df-4", title: "آماده‌سازی چکیده فارسی و انگلیسی", done: false }
+          ],
+          committee: [],
+          notes: ""
+        }
+      };
     }
 
-    // دریافت لیست جلسات از دیتابیس آنلاین
-    async function fetchMeetings() {
-      loading.classList.remove('hidden');
-      meetingsList.innerHTML = '';
+    // -------------------------------------------------------------------------
+    // کامپوننت انتخابگر تاریخ شمسی (Jalali DatePicker)
+    // -------------------------------------------------------------------------
+    function JalaliDatePicker({ value, onChange, allowEmpty = false, dark = false }) {
+      const todayParts = gregorianToJalali(...todayIso().split("-").map(Number));
+      const currentParts = value ? gregorianToJalali(...value.slice(0, 10).split("-").map(Number)) : [0, 0, 0];
+      const minYear = Math.min(todayParts[0] - 2, currentParts[0] || todayParts[0]);
+      const maxYear = Math.max(todayParts[0] + 5, currentParts[0] || todayParts[0]);
 
-      const { data: meetings, error } = await sbClient
-        .from('meetings')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const selectClass = dark
+        ? "min-w-0 w-full rounded-xl border border-white/30 bg-white/10 px-2 py-2 text-xs md:text-sm text-white outline-none [&>option]:bg-white [&>option]:text-slate-800"
+        : "min-w-0 w-full rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs md:text-sm text-slate-800 outline-none focus:border-indigo-500";
 
-      loading.classList.add('hidden');
+      const handlePartChange = (index, val) => {
+        const next = [...currentParts];
+        next[index] = val;
+        if (allowEmpty && !val) {
+          onChange("");
+          return;
+        }
+        const y = next[0] || todayParts[0];
+        const m = next[1] || todayParts[1];
+        const maxD = m <= 6 ? 31 : m <= 11 ? 30 : 29;
+        const d = Math.min(next[2] || todayParts[2], maxD);
+        onChange(jalaliToGregorian(y, m, d));
+      };
 
-      if (error) {
-        meetingsList.innerHTML = `<p class="text-rose-500 text-xs">خطا در دریافت اطلاعات: ${error.message}</p>`;
-        return;
-      }
+      return (
+        <div className="grid w-full gap-1.5" style={{ gridTemplateColumns: "4rem minmax(5.5rem,1fr) 5rem" }}>
+          <select value={currentParts[2]} onChange={e => handlePartChange(2, +e.target.value)} className={selectClass}>
+            {allowEmpty && <option value={0}>روز</option>}
+            {Array.from({ length: 31 }, (_, i) => (
+              <option key={i+1} value={i+1}>{toFaDigits(i+1)}</option>
+            ))}
+          </select>
+          <select value={currentParts[1]} onChange={e => handlePartChange(1, +e.target.value)} className={selectClass}>
+            {allowEmpty && <option value={0}>ماه</option>}
+            {JALALI_MONTHS.map((m, i) => (
+              <option key={m} value={i+1}>{m}</option>
+            ))}
+          </select>
+          <select value={currentParts[0]} onChange={e => handlePartChange(0, +e.target.value)} className={selectClass}>
+            {allowEmpty && <option value={0}>سال</option>}
+            {Array.from({ length: maxYear - minYear + 1 }, (_, i) => (
+              <option key={minYear+i} value={minYear+i}>{toFaDigits(minYear+i)}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
 
-      if (!meetings || meetings.length === 0) {
-        meetingsList.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 border border-dashed">هنوز جلسه‌ای ثبت نشده است. اولین جلسه را از فرم کناری ثبت کنید.</div>`;
-        return;
-      }
+    // -------------------------------------------------------------------------
+    // مدیریت وضعیت کل برنامه + همگام‌سازی خودکار با Supabase
+    // -------------------------------------------------------------------------
+    const AppContext = createContext(null);
 
-      meetings.forEach(m => {
-        const card = document.createElement('div');
-        card.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4";
-        
-        let statusBadge = m.status === 'تایید شده' 
-          ? '<span class="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">تایید شده</span>'
-          : (m.status === 'نیاز به اصلاحات' 
-            ? '<span class="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium">نیاز به اصلاحات</span>'
-            : '<span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-medium">در انتظار بررسی</span>');
+    function AppProvider({ children, user, onLogout }) {
+      const [store, setStore] = useState(() => {
+        try {
+          const cached = localStorage.getItem("thesis_full_cache_v2");
+          return cached ? JSON.parse(cached) : getInitialData();
+        } catch {
+          return getInitialData();
+        }
+      });
+      const [syncStatus, setSyncStatus] = useState("connecting"); // connecting, live, saving, error
+      const [toasts, setToasts] = useState([]);
+      const [confirmDialog, setConfirmDialog] = useState(null);
+      const isInitialLoad = useRef(true);
+      const saveTimeout = useRef(null);
 
-        card.innerHTML = `
-          <div class="flex items-start justify-between">
-            <div>
-              <span class="text-xs text-indigo-600 font-semibold">${m.meeting_date}</span>
-              <h4 class="font-bold text-slate-900 text-base mt-1">${m.title}</h4>
+      const toast = (message, type = "ok") => {
+        const id = uid();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3200);
+      };
+
+      const askConfirm = (message, onConfirm) => {
+        setConfirmDialog({ message, onConfirm });
+      };
+
+      // ۱. بارگذاری اولیه از Supabase و اشتراک Real-time
+      useEffect(() => {
+        let mounted = true;
+        async function loadRemote() {
+          setSyncStatus("connecting");
+          const { data, error } = await sbClient
+            .from("thesis_store")
+            .select("data")
+            .eq("id", "main")
+            .maybeSingle();
+
+          if (!mounted) return;
+
+          if (error) {
+            console.warn("Supabase fetch notice:", error.message);
+            setSyncStatus("error");
+            return;
+          }
+
+          if (data && data.data) {
+            setStore(data.data);
+            localStorage.setItem("thesis_full_cache_v2", JSON.stringify(data.data));
+            setSyncStatus("live");
+          } else {
+            // اگر جدول خالی بود، داده پیش‌فرض را در دیتابیس ذخیره کن
+            const initial = getInitialData();
+            const { error: insErr } = await sbClient
+              .from("thesis_store")
+              .upsert({ id: "main", data: initial, updated_at: new Date().toISOString() });
+            setSyncStatus(insErr ? "error" : "live");
+          }
+          isInitialLoad.current = false;
+        }
+
+        loadRemote();
+
+        // گوش دادن به تغییرات لحظه‌ای از طرف استاد یا دانشجو
+        const channel = sbClient
+          .channel("realtime_thesis_store")
+          .on("postgres_changes", { event: "*", schema: "public", table: "thesis_store", filter: "id=eq.main" }, payload => {
+            if (payload.new && payload.new.data) {
+              setStore(payload.new.data);
+              localStorage.setItem("thesis_full_cache_v2", JSON.stringify(payload.new.data));
+              setSyncStatus("live");
+            }
+          })
+          .subscribe();
+
+        return () => {
+          mounted = false;
+          sbClient.removeChannel(channel);
+        };
+      }, []);
+
+      // ۲. ذخیره خودکار در Supabase در صورت هرگونه تغییر
+      const updateStore = (updater) => {
+        setStore(prev => {
+          const next = typeof updater === "function" ? updater(prev) : updater;
+          localStorage.setItem("thesis_full_cache_v2", JSON.stringify(next));
+
+          if (!isInitialLoad.current) {
+            setSyncStatus("saving");
+            if (saveTimeout.current) clearTimeout(saveTimeout.current);
+            saveTimeout.current = setTimeout(async () => {
+              const { error } = await sbClient
+                .from("thesis_store")
+                .upsert({ id: "main", data: next, updated_at: new Date().toISOString() });
+              setSyncStatus(error ? "error" : "live");
+            }, 600);
+          }
+          return next;
+        });
+      };
+
+      const value = {
+        store,
+        updateStore,
+        syncStatus,
+        toast,
+        toasts,
+        askConfirm,
+        confirmDialog,
+        setConfirmDialog,
+        user,
+        onLogout
+      };
+
+      return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    }
+
+    const useApp = () => useContext(AppContext);
+
+    // -------------------------------------------------------------------------
+    // ۱. نمای کلی (Overview)
+    // -------------------------------------------------------------------------
+    function OverviewView({ onNavigate, onOpenModal, onOpenResponse }) {
+      const { store, updateStore } = useApp();
+      const doneActions = store.actions.filter(a => a.done).length;
+      const actionPct = store.actions.length ? Math.round((doneActions / store.actions.length) * 100) : 0;
+      const openActions = store.actions.filter(a => !a.done);
+      const nextMilestone = [...store.milestones].filter(m => !m.done).sort((a, b) => a.date.localeCompare(b.date))[0];
+      const chapterPct = store.chapters.length ? Math.round(store.chapters.reduce((s, c) => s + Number(c.progress || 0), 0) / store.chapters.length) : 0;
+      const overallPct = store.actions.length && store.chapters.length ? Math.round((actionPct + chapterPct) / 2) : (store.actions.length ? actionPct : chapterPct);
+
+      const myOpenActions = openActions.filter(a => (a.owner ?? "من") === "من");
+      const profOpenActions = openActions.filter(a => a.owner === "استاد");
+
+      const statCards = [
+        { key: "pendingActions", label: "وظایف باز", value: toFaDigits(openActions.length), color: "from-slate-600 to-slate-700", icon: "📋" },
+        { key: "sessions", label: "جلسات ثبت‌شده", value: toFaDigits(store.sessions.length), color: "from-indigo-700 to-indigo-800", icon: "👥" },
+        { key: "upcomingMilestones", label: "رویدادهای پیش‌رو", value: toFaDigits(store.milestones.filter(m => !m.done).length), color: "from-slate-500 to-slate-600", icon: "📅" },
+        { key: "completedActions", label: "وظایف انجام‌شده", value: toFaDigits(doneActions), color: "from-teal-700 to-teal-800", icon: "✅" }
+      ];
+
+      return (
+        <div className="space-y-6">
+          {/* کارت هدر پیشرفت کلی */}
+          <div className="rounded-2xl bg-indigo-800 p-6 text-white shadow-sm md:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-4 mb-4">
+              <div>
+                <input
+                  value={store.meta?.title || "گزارش کار پایان‌نامه"}
+                  onChange={e => updateStore(s => ({ ...s, meta: { ...s.meta, title: e.target.value } }))}
+                  className="bg-transparent text-lg md:text-xl font-extrabold text-white outline-none border-b border-transparent focus:border-white/40"
+                />
+                <div className="flex flex-wrap gap-4 mt-1 text-xs text-indigo-200">
+                  <label className="flex items-center gap-1">
+                    <span>پژوهشگر:</span>
+                    <input
+                      value={store.meta?.student || ""}
+                      onChange={e => updateStore(s => ({ ...s, meta: { ...s.meta, student: e.target.value } }))}
+                      placeholder="نام دانشجو..."
+                      className="bg-white/10 rounded px-2 py-0.5 text-white outline-none"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <span>استاد راهنما:</span>
+                    <input
+                      value={store.meta?.advisor || ""}
+                      onChange={e => updateStore(s => ({ ...s, meta: { ...s.meta, advisor: e.target.value } }))}
+                      placeholder="نام استاد..."
+                      className="bg-white/10 rounded px-2 py-0.5 text-white outline-none"
+                    />
+                  </label>
+                </div>
+              </div>
+              <span className="text-xs bg-white/15 px-3 py-1 rounded-full text-indigo-100">پیشرفت کل پایان‌نامه</span>
             </div>
-            ${statusBadge}
+
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-4xl font-extrabold">{toFaDigits(overallPct)}٪</p>
+                <p className="mt-1 text-sm text-indigo-100">
+                  {toFaDigits(doneActions)} از {toFaDigits(store.actions.length)} اقدام انجام شده · میانگین پیشرفت فصول {toFaDigits(chapterPct)}٪
+                </p>
+              </div>
+              {nextMilestone && (
+                <div className="rounded-xl bg-white/10 px-4 py-3">
+                  <p className="text-xs text-indigo-200">نزدیک‌ترین رویداد</p>
+                  <p className="text-sm font-bold mt-0.5">{nextMilestone.title}</p>
+                  <p className="text-xs text-indigo-200 mt-0.5">{formatJalali(nextMilestone.date)}</p>
+                </div>
+              )}
+            </div>
+            <div className="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-white/20">
+              <div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${overallPct}%` }} />
+            </div>
           </div>
 
-          <div class="text-sm text-slate-600 whitespace-pre-line bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <strong class="text-slate-800 block text-xs mb-1">گزارش دانشجو:</strong>
-            ${m.summary}
+          {/* ۴ کارت آماری */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {statCards.map(c => (
+              <button
+                key={c.key}
+                onClick={() => onOpenModal(c.key)}
+                className="group rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className={`mb-3 flex size-10 items-center justify-center rounded-xl bg-gradient-to-br ${c.color} text-white text-lg`}>
+                  {c.icon}
+                </div>
+                <p className="text-2xl font-extrabold text-slate-800">{c.value}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{c.label}</p>
+              </button>
+            ))}
           </div>
 
-          ${m.next_tasks ? `
-            <div class="text-xs text-slate-600">
-              <strong class="text-slate-700">تکالیف جلسه بعد:</strong> ${m.next_tasks}
-            </div>` : ''}
+          {/* تفکیک وظایف من / استاد و پیشرفت فصول */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <div className="space-y-6 lg:col-span-2">
+              {[["وظایف من (دانشجو)", myOpenActions], ["موارد مرتبط با استاد راهنما", profOpenActions]].map(([title, list]) => (
+                <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-3 flex items-center justify-between text-sm font-bold text-slate-800">
+                    <span>{title}</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                      {toFaDigits(list.length)}
+                    </span>
+                  </h3>
+                  {list.length === 0 ? (
+                    <p className="text-xs text-slate-400">مورد بازی وجود ندارد.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {list.map(act => (
+                        <li key={act.id}>
+                          <button
+                            onClick={() => onOpenResponse(act.id)}
+                            className="w-full rounded-xl border border-slate-100 p-2.5 text-right hover:bg-slate-50 transition"
+                          >
+                            <p className="text-sm leading-7 text-slate-700">{act.title}</p>
+                            {act.dueDate && <p className="text-[11px] text-slate-400">مهلت: {formatJalali(act.dueDate)}</p>}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
 
-          ${m.file_link ? `
-            <div>
-              <a href="${m.file_link}" target="_blank" class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline">
-                📄 مشاهده فایل یا پیش‌نویس ضمیمه‌شده
-              </a>
-            </div>` : ''}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800">✍️ پیشرفت نگارش فصول</h3>
+                <button onClick={() => onNavigate("writing")} className="text-xs font-medium text-indigo-600 hover:underline">
+                  مشاهده و ویرایش فصول
+                </button>
+              </div>
+              <p className="mb-4 text-xs text-slate-400">میانگین پیشرفت کلی: {toFaDigits(chapterPct)}٪</p>
+              <ul className="space-y-3.5">
+                {store.chapters.map(ch => (
+                  <li key={ch.id}>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="font-medium text-slate-700">{ch.title}</span>
+                      <span className="text-slate-400">{toFaDigits(ch.progress)}٪ ({ch.status})</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${ch.progress}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
 
-          <!-- بخش بازخورد و تغییر وضعیت توسط استاد راهنما -->
-          <div class="pt-3 border-t border-slate-100">
-            <label class="block text-xs font-semibold text-slate-700 mb-1">بازخورد و وضعیت ارزیابی استاد راهنما:</label>
-            <div class="flex flex-col gap-2">
-              <textarea id="feedback-${m.id}" rows="2" placeholder="استاد محترم بازخورد و اصلاحات را در این قسمت وارد فرمایید..." 
-                class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-indigo-500 bg-white">${m.prof_feedback || ''}</textarea>
-              
-              <div class="flex items-center justify-between">
-                <select id="status-${m.id}" class="text-xs border rounded-lg px-2 py-1.5 bg-white text-slate-700 outline-none">
-                  <option value="در انتظار بررسی" ${m.status === 'در انتظار بررسی' ? 'selected' : ''}>در انتظار بررسی</option>
-                  <option value="تایید شده" ${m.status === 'تایید شده' ? 'selected' : ''}>تایید شده</option>
-                  <option value="نیاز به اصلاحات" ${m.status === 'نیاز به اصلاحات' ? 'selected' : ''}>نیاز به اصلاحات</option>
+          {/* آخرین جلسات */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">🗓️ آخرین جلسات با استاد راهنما</h3>
+              <button onClick={() => onNavigate("sessions")} className="text-xs font-medium text-indigo-600 hover:underline">
+                همه جلسات
+              </button>
+            </div>
+            {store.sessions.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">هنوز جلسه‌ای ثبت نشده است.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {[...store.sessions].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 4).map(s => {
+                  const sActs = store.actions.filter(a => a.sessionId === s.id);
+                  const openActs = sActs.filter(a => !a.done);
+                  return (
+                    <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{s.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{formatJalali(s.date)} · {s.type}</p>
+                      </div>
+                      {openActs.length > 0 ? (
+                        <button
+                          onClick={() => onOpenResponse(openActs[0].id)}
+                          className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                        >
+                          {toFaDigits(openActs.length)} وظیفه باز
+                        </button>
+                      ) : sActs.length > 0 ? (
+                        <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                          همه وظایف انجام شد ✓
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۲. بخش جلسات با استاد راهنما (Sessions)
+    // -------------------------------------------------------------------------
+    function SessionsView({ onOpenResponse, highlightId, clearHighlight }) {
+      const { store, updateStore, toast, askConfirm } = useApp();
+      const sortedAsc = useMemo(() => [...store.sessions].sort((a, b) => a.date.localeCompare(b.date) || String(a.createdAt).localeCompare(String(b.createdAt))), [store.sessions]);
+      const [expandedId, setExpandedId] = useState(() => sortedAsc[sortedAsc.length - 1]?.id || null);
+
+      useEffect(() => {
+        if (highlightId) {
+          setExpandedId(highlightId);
+          setTimeout(() => {
+            document.getElementById(`session-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 100);
+          const t = setTimeout(clearHighlight, 2500);
+          return () => clearTimeout(t);
+        }
+      }, [highlightId]);
+
+      const addNewSession = () => {
+        const last = sortedAsc[sortedAsc.length - 1];
+        const newId = uid();
+        const newSession = {
+          id: newId,
+          title: `جلسه ${toFaDigits(sortedAsc.length + 1)}`,
+          date: last?.nextDate || todayIso(),
+          nextDate: "",
+          type: "حضوری",
+          summary: "",
+          decisions: "",
+          feedback: "",
+          fileLink: "",
+          questions: [],
+          createdAt: new Date().toISOString()
+        };
+        updateStore(s => ({ ...s, sessions: [newSession, ...s.sessions] }));
+        setExpandedId(newId);
+        toast("جلسه جدید ایجاد شد");
+      };
+
+      return (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-slate-500">
+              هر جلسه یک گزارش کامل است: خلاصه، پیگیری جلسه قبل، سوالات، تصمیم‌ها، بازخورد استاد و اقدامات بعدی.
+            </p>
+            <button
+              onClick={addNewSession}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-l from-indigo-700 to-indigo-800 px-4 py-2.5 text-sm font-medium text-white shadow hover:opacity-95"
+            >
+              <span>+ جلسه جدید</span>
+            </button>
+          </div>
+
+          {sortedAsc.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">
+              هنوز جلسه‌ای ثبت نشده است.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {[...sortedAsc].reverse().map(session => {
+                const idx = sortedAsc.findIndex(x => x.id === session.id);
+                const prevSession = idx > 0 ? sortedAsc[idx - 1] : null;
+                return (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    number={idx + 1}
+                    prev={prevSession}
+                    expanded={expandedId === session.id}
+                    onToggle={() => setExpandedId(prev => prev === session.id ? null : session.id)}
+                    onOpenResponse={onOpenResponse}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function SectionBanner({ title, count, tone }) {
+      return (
+        <div className={`mb-2.5 mt-6 rounded-xl bg-gradient-to-l px-4 py-2 text-sm font-bold text-white shadow-sm flex items-center justify-between ${tone}`}>
+          <span>{title}</span>
+          {count !== undefined && (
+            <span className="rounded-full bg-white/25 px-2.5 py-0.5 text-xs">{toFaDigits(count)}</span>
+          )}
+        </div>
+      );
+    }
+
+    function ActionRow({ action, onOpenResponse, canDelete }) {
+      const { updateStore, askConfirm } = useApp();
+
+      const toggleDone = () => {
+        updateStore(s => ({
+          ...s,
+          actions: s.actions.map(a => a.id === action.id ? { ...a, done: !a.done } : a)
+        }));
+      };
+
+      const toggleOwner = () => {
+        updateStore(s => ({
+          ...s,
+          actions: s.actions.map(a => a.id === action.id ? { ...a, owner: (a.owner ?? "من") === "من" ? "استاد" : "من" } : a)
+        }));
+      };
+
+      const removeAct = () => {
+        askConfirm("این اقدام حذف شود؟", () => {
+          updateStore(s => ({ ...s, actions: s.actions.filter(a => a.id !== action.id) }));
+        });
+      };
+
+      return (
+        <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+          <label className="flex min-w-0 flex-1 items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={action.done} onChange={toggleDone} className="mt-1.5 size-4 shrink-0 accent-indigo-600" />
+            <div className="min-w-0 flex-1">
+              <span className={`text-sm leading-7 block ${action.done ? "text-slate-400 line-through" : "text-slate-800 font-medium"}`}>
+                {action.title}
+              </span>
+              {action.response && (
+                <p className="mt-1 text-xs text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-lg border border-emerald-100">
+                  <strong>پاسخ ثبت‌شده:</strong> {action.response}
+                </p>
+              )}
+            </div>
+          </label>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={toggleOwner}
+              title="کلیک برای تغییر مسئول (من / استاد)"
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                action.owner === "استاد" ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700"
+              }`}
+            >
+              مسئول: {action.owner ?? "من"}
+            </button>
+            {action.dueDate && <span className="text-[11px] text-slate-400">{formatJalali(action.dueDate)}</span>}
+            <button
+              onClick={() => onOpenResponse(action.id)}
+              className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              ثبت/مشاهده پاسخ
+            </button>
+            {canDelete && (
+              <button onClick={removeAct} className="text-rose-400 hover:text-rose-600 px-1 text-sm" title="حذف">
+                🗑️
+              </button>
+            )}
+          </div>
+        </li>
+      );
+    }
+
+    function SessionCard({ session, number, prev, expanded, onToggle, onOpenResponse }) {
+      const { store, updateStore, toast, askConfirm } = useApp();
+      const [newActTitle, setNewActTitle] = useState("");
+      const [newActOwner, setNewActOwner] = useState("من");
+      const [newActDue, setNewActDue] = useState("");
+      const [newQuestion, setNewQuestion] = useState("");
+
+      const sessionActions = store.actions.filter(a => a.sessionId === session.id);
+      const prevActions = prev ? store.actions.filter(a => a.sessionId === prev.id) : [];
+      const prevDone = prevActions.filter(a => a.done);
+      const prevUndone = prevActions.filter(a => !a.done);
+      const questions = session.questions ?? [];
+
+      const updateField = (patch) => {
+        updateStore(s => ({
+          ...s,
+          sessions: s.sessions.map(item => item.id === session.id ? { ...item, ...patch } : item)
+        }));
+      };
+
+      const handleAddAction = () => {
+        if (!newActTitle.trim()) return;
+        const act = {
+          id: uid(),
+          sessionId: session.id,
+          title: newActTitle.trim(),
+          done: false,
+          owner: newActOwner,
+          dueDate: newActDue || "",
+          response: ""
+        };
+        updateStore(s => ({ ...s, actions: [...s.actions, act] }));
+        setNewActTitle("");
+        setNewActDue("");
+        toast("اقدام جدید اضافه شد");
+      };
+
+      const handleAddQuestion = () => {
+        if (!newQuestion.trim()) return;
+        updateField({
+          questions: [...questions, { id: uid(), text: newQuestion.trim(), answer: "", answered: false }]
+        });
+        setNewQuestion("");
+      };
+
+      const updateQuestion = (qid, patch) => {
+        updateField({
+          questions: questions.map(q => q.id === qid ? { ...q, ...patch } : q)
+        });
+      };
+
+      const copyReportText = () => {
+        const lines = [
+          `📌 گزارش ${session.title} — ${formatJalali(session.date)} (${session.type})`,
+          "",
+          "🔹 خلاصه مباحث جلسه:",
+          session.summary || "—",
+          ""
+        ];
+        if (session.decisions) lines.push("⚖️ تصمیم‌ها و توافقات:", session.decisions, "");
+        if (session.feedback) lines.push("👨‍🏫 بازخورد استاد راهنما:", session.feedback, "");
+        if (sessionActions.length) {
+          lines.push("📋 اقدامات تعریف‌شده برای جلسه بعد:");
+          sessionActions.forEach(a => {
+            lines.push(`• ${a.title} [${a.owner ?? "من"}] ${a.done ? "✓" : ""}`);
+          });
+        }
+        navigator.clipboard.writeText(lines.join("\n")).then(() => toast("متن صورت‌جلسه کپی شد"));
+      };
+
+      return (
+        <div id={`session-${session.id}`} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <button
+            onClick={onToggle}
+            className="flex w-full items-center justify-between gap-3 p-4 text-right hover:bg-slate-50/60 transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-700 to-indigo-800 text-white font-bold text-sm">
+                {toFaDigits(number)}
+              </div>
+              <div>
+                <p className="text-sm md:text-base font-bold text-slate-800">{session.title}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {formatJalali(session.date)} · {session.type} · {toFaDigits(sessionActions.length)} اقدام · {toFaDigits(questions.length)} سوال
+                </p>
+              </div>
+            </div>
+            <span className={`text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▼</span>
+          </button>
+
+          {expanded && (
+            <div className="border-t border-slate-100 p-4 md:p-6">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">عنوان جلسه</span>
+                  <input
+                    value={session.title}
+                    onChange={e => updateField({ title: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">نوع برگزاری</span>
+                  <select
+                    value={session.type}
+                    onChange={e => updateField({ type: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option>حضوری</option>
+                    <option>آنلاین</option>
+                    <option>تلفنی / پیام‌رسان</option>
+                  </select>
+                </label>
+                <div>
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">تاریخ برگزاری جلسه (شمسی)</span>
+                  <JalaliDatePicker value={session.date} onChange={val => updateField({ date: val })} />
+                </div>
+                <div>
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">تاریخ جلسه بعدی (در صورت تعیین)</span>
+                  <JalaliDatePicker allowEmpty value={session.nextDate || ""} onChange={val => updateField({ nextDate: val })} />
+                </div>
+              </div>
+
+              {/* لینک فایل ضمیمه (گوگل درایو / اورلیف) */}
+              <div className="mt-4">
+                <span className="mb-1 block text-xs font-semibold text-slate-500">لینک فایل / مقاله / پیش‌نویس ارائه‌شده در این جلسه (Google Drive, Overleaf...)</span>
+                <div className="flex gap-2">
+                  <input
+                    dir="ltr"
+                    type="url"
+                    value={session.fileLink || ""}
+                    onChange={e => updateField({ fileLink: e.target.value })}
+                    placeholder="https://drive.google.com/..."
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                  {session.fileLink && (
+                    <a
+                      href={session.fileLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 rounded-xl bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 flex items-center"
+                    >
+                      مشاهده فایل ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <SectionBanner title="خلاصه مباحث و گزارش جلسه" tone="from-indigo-700 to-indigo-800" />
+              <textarea
+                rows={5}
+                value={session.summary}
+                onChange={e => updateField({ summary: e.target.value })}
+                placeholder="در این جلسه چه مباحثی مطرح شد؟"
+                className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
+              />
+
+              {/* پیگیری جلسه قبل */}
+              {prev && (
+                <>
+                  <SectionBanner title="اقدامات انجام‌شده از جلسه قبل" count={prevDone.length} tone="from-teal-700 to-teal-800" />
+                  {prevDone.length === 0 ? (
+                    <p className="text-xs text-slate-400">موردی ثبت نشده است.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {prevDone.map(a => <ActionRow key={a.id} action={a} onOpenResponse={onOpenResponse} />)}
+                    </ul>
+                  )}
+
+                  <SectionBanner title="اقدامات باقی‌مانده از جلسه قبل" count={prevUndone.length} tone="from-amber-600 to-amber-700" />
+                  {prevUndone.length === 0 ? (
+                    <p className="text-xs text-emerald-600 font-medium">همه اقدامات جلسه قبل تکمیل شده است 🎉</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {prevUndone.map(a => <ActionRow key={a.id} action={a} onOpenResponse={onOpenResponse} />)}
+                    </ul>
+                  )}
+                </>
+              )}
+
+              {/* تصمیمات و بازخورد استاد */}
+              <SectionBanner title="تصمیم‌ها و موارد توافق‌شده" tone="from-indigo-600 to-indigo-700" />
+              <textarea
+                rows={2}
+                value={session.decisions || ""}
+                onChange={e => updateField({ decisions: e.target.value })}
+                placeholder="چه تصمیماتی در این جلسه نهایی شد؟"
+                className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
+              />
+
+              <SectionBanner title="بازخورد، نظرات و اصلاحات استاد راهنما" tone="from-slate-600 to-slate-700" />
+              <textarea
+                rows={3}
+                value={session.feedback || ""}
+                onChange={e => updateField({ feedback: e.target.value })}
+                placeholder="استاد محترم راهنما یا دانشجو می‌توانند نظرات، نقاط قوت و اصلاحات مدنظر را در این کادر ثبت نمایند..."
+                className="w-full rounded-xl border border-amber-200 bg-amber-50/30 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
+              />
+
+              {/* سوالات جلسه */}
+              <SectionBanner title="سوالات و ابهامات مطرح‌شده" count={questions.length} tone="from-slate-500 to-slate-600" />
+              <div className="space-y-3">
+                {questions.map(q => (
+                  <div key={q.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <input
+                      value={q.text}
+                      onChange={e => updateQuestion(q.id, { text: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium outline-none"
+                    />
+                    <textarea
+                      rows={2}
+                      value={q.answer}
+                      onChange={e => updateQuestion(q.id, { answer: e.target.value })}
+                      placeholder="پاسخ استاد یا نتیجه بررسی..."
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none"
+                    />
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="flex items-center gap-1.5 text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={q.answered}
+                          onChange={() => updateQuestion(q.id, { answered: !q.answered })}
+                        />
+                        <span>پاسخ داده شد</span>
+                      </label>
+                      <button
+                        onClick={() => updateField({ questions: questions.filter(x => x.id !== q.id) })}
+                        className="text-rose-500 hover:underline"
+                      >
+                        حذف سوال
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <input
+                    value={newQuestion}
+                    onChange={e => setNewQuestion(e.target.value)}
+                    placeholder="سوال جدید برای طرح در جلسه..."
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    onClick={handleAddQuestion}
+                    className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-medium text-white hover:bg-slate-900"
+                  >
+                    + افزودن سوال
+                  </button>
+                </div>
+              </div>
+
+              {/* اقدامات تا جلسه بعد */}
+              <SectionBanner title="اقدامات و تکالیف تا جلسه بعد" count={sessionActions.length} tone="from-indigo-700 to-indigo-800" />
+              {sessionActions.length > 0 && (
+                <ul className="mb-4 space-y-2">
+                  {sessionActions.map(a => (
+                    <ActionRow key={a.id} action={a} onOpenResponse={onOpenResponse} canDelete />
+                  ))}
+                </ul>
+              )}
+
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-3">
+                <input
+                  value={newActTitle}
+                  onChange={e => setNewActTitle(e.target.value)}
+                  placeholder="عنوان اقدام یا تکلیف جدید را بنویسید..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={newActOwner}
+                      onChange={e => setNewActOwner(e.target.value)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium outline-none"
+                    >
+                      <option value="من">مسئول: من (دانشجو)</option>
+                      <option value="استاد">مسئول: استاد راهنما</option>
+                    </select>
+                    <div className="w-64">
+                      <JalaliDatePicker allowEmpty value={newActDue} onChange={setNewActDue} />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAddAction}
+                    className="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800"
+                  >
+                    + ثبت اقدام جدید
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+                <button
+                  onClick={copyReportText}
+                  className="rounded-xl bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                >
+                  📋 کپی متن صورت‌جلسه
+                </button>
+                <button
+                  onClick={() => askConfirm("این جلسه و تمام اقدامات آن حذف شود؟", () => {
+                    updateStore(s => ({
+                      ...s,
+                      sessions: s.sessions.filter(x => x.id !== session.id),
+                      actions: s.actions.filter(a => a.sessionId !== session.id)
+                    }));
+                    toast("جلسه حذف شد", "info");
+                  })}
+                  className="text-xs font-medium text-rose-500 hover:text-rose-700"
+                >
+                  🗑️ حذف جلسه
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۳. نگارش فصول (Writing)
+    // -------------------------------------------------------------------------
+    function WritingView() {
+      const { store, updateStore, askConfirm, toast } = useApp();
+      const [newTitle, setNewTitle] = useState("");
+      const totalWords = store.chapters.reduce((s, c) => s + Number(c.wordCount || 0), 0);
+      const targetWords = store.chapters.reduce((s, c) => s + Number(c.wordTarget || 0), 0);
+
+      const statusColors = {
+        "شروع نشده": "bg-slate-100 text-slate-600",
+        "در حال نگارش": "bg-amber-100 text-amber-800",
+        "بازبینی استاد": "bg-indigo-100 text-indigo-800",
+        "تکمیل": "bg-emerald-100 text-emerald-800"
+      };
+
+      const updateChapter = (id, patch) => {
+        updateStore(s => ({
+          ...s,
+          chapters: s.chapters.map(c => c.id === id ? { ...c, ...patch } : c)
+        }));
+      };
+
+      return (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-extrabold text-slate-800">{toFaDigits(store.chapters.length)}</p>
+              <p className="text-xs text-slate-400">تعداد فصول</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-extrabold text-indigo-700">{toFaDigits(totalWords.toLocaleString())}</p>
+              <p className="text-xs text-slate-400">کلمات نوشته‌شده</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-extrabold text-slate-800">{toFaDigits(targetWords.toLocaleString())}</p>
+              <p className="text-xs text-slate-400">هدف کل کلمات</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-4">
+            <input
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="عنوان فصل جدید..."
+              className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+            />
+            <button
+              onClick={() => {
+                if (!newTitle.trim()) return;
+                updateStore(s => ({
+                  ...s,
+                  chapters: [...s.chapters, { id: uid(), title: newTitle.trim(), progress: 0, wordTarget: 4000, wordCount: 0, status: "شروع نشده", notes: "" }]
+                }));
+                setNewTitle("");
+                toast("فصل جدید اضافه شد");
+              }}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + افزودن فصل
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {store.chapters.map(ch => (
+              <div key={ch.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <input
+                    value={ch.title}
+                    onChange={e => updateChapter(ch.id, { title: e.target.value })}
+                    className="text-sm font-bold text-slate-800 border-b border-transparent focus:border-indigo-400 outline-none"
+                  />
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={ch.status}
+                      onChange={e => updateChapter(ch.id, { status: e.target.value })}
+                      className={`rounded-lg px-3 py-1 text-xs font-bold outline-none ${statusColors[ch.status] || statusColors["شروع نشده"]}`}
+                    >
+                      <option>شروع نشده</option>
+                      <option>در حال نگارش</option>
+                      <option>بازبینی استاد</option>
+                      <option>تکمیل</option>
+                    </select>
+                    <button
+                      onClick={() => askConfirm("این فصل حذف شود؟", () => updateStore(s => ({ ...s, chapters: s.chapters.filter(x => x.id !== ch.id) })))}
+                      className="text-rose-400 hover:text-rose-600 text-sm"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={ch.progress}
+                    onChange={e => updateChapter(ch.id, { progress: Number(e.target.value) })}
+                    className="h-2 flex-1 accent-indigo-600"
+                  />
+                  <span className="w-12 text-left text-sm font-bold text-indigo-700">{toFaDigits(ch.progress)}٪</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:w-80">
+                  <label className="text-xs text-slate-500">
+                    کلمات نوشته‌شده
+                    <input
+                      type="number"
+                      value={ch.wordCount}
+                      onChange={e => updateChapter(ch.id, { wordCount: Number(e.target.value) })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    هدف کلمات
+                    <input
+                      type="number"
+                      value={ch.wordTarget}
+                      onChange={e => updateChapter(ch.id, { wordTarget: Number(e.target.value) })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none"
+                    />
+                  </label>
+                </div>
+
+                <textarea
+                  rows={2}
+                  value={ch.notes || ""}
+                  onChange={e => updateChapter(ch.id, { notes: e.target.value })}
+                  placeholder="یادداشت یا بازخورد استاد درباره این فصل..."
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-sm outline-none focus:border-indigo-500"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۴. چارچوب و ساختار درختی (Framework)
+    // -------------------------------------------------------------------------
+    function FrameworkView() {
+      const { store, updateStore, toast } = useApp();
+      const [newRoot, setNewRoot] = useState("");
+
+      const countNodes = (nodes) => nodes.reduce((acc, n) => acc + 1 + countNodes(n.children || []), 0);
+      const countDone = (nodes) => nodes.reduce((acc, n) => acc + (n.done ? 1 : 0) + countDone(n.children || []), 0);
+
+      const total = countNodes(store.framework);
+      const done = countDone(store.framework);
+      const pct = total ? Math.round((done / total) * 100) : 0;
+
+      const modifyTree = (nodes, path, fn) => {
+        if (path.length === 0) return nodes;
+        const [head, ...rest] = path;
+        return nodes.map((n, idx) => {
+          if (idx !== head) return n;
+          if (rest.length === 0) return fn(n);
+          return { ...n, children: modifyTree(n.children || [], rest, fn) };
+        });
+      };
+
+      const deleteFromTree = (nodes, path) => {
+        if (path.length === 1) return nodes.filter((_, idx) => idx !== path[0]);
+        const [head, ...rest] = path;
+        return nodes.map((n, idx) => idx === head ? { ...n, children: deleteFromTree(n.children || [], rest) } : n);
+      };
+
+      return (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">🌿 پیشرفت تکمیل ساختار پایان‌نامه</h3>
+              <span className="text-sm font-bold text-indigo-600">{toFaDigits(pct)}٪</span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              value={newRoot}
+              onChange={e => setNewRoot(e.target.value)}
+              placeholder="افزودن سرفصل یا بخش اصلی جدید..."
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+            />
+            <button
+              onClick={() => {
+                if (!newRoot.trim()) return;
+                updateStore(s => ({
+                  ...s,
+                  framework: [...s.framework, { id: uid(), title: newRoot.trim(), done: false, children: [] }]
+                }));
+                setNewRoot("");
+                toast("بخش جدید اضافه شد");
+              }}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + افزودن
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {store.framework.map((node, idx) => (
+              <FrameworkNode
+                key={node.id}
+                node={node}
+                path={[idx]}
+                depth={0}
+                onToggle={(p) => updateStore(s => ({ ...s, framework: modifyTree(s.framework, p, n => ({ ...n, done: !n.done })) }))}
+                onAddChild={(p, title) => updateStore(s => ({
+                  ...s,
+                  framework: modifyTree(s.framework, p, n => ({ ...n, children: [...(n.children || []), { id: uid(), title, done: false, children: [] }] }))
+                }))}
+                onDelete={(p) => updateStore(s => ({ ...s, framework: deleteFromTree(s.framework, p) }))}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function FrameworkNode({ node, path, depth, onToggle, onAddChild, onDelete }) {
+      const [adding, setAdding] = useState(false);
+      const [subTitle, setSubTitle] = useState("");
+
+      return (
+        <div
+          className={`rounded-2xl border p-3.5 ${depth > 0 ? "border-slate-100 bg-slate-50/70" : "border-slate-200 bg-white shadow-sm"}`}
+          style={{ marginRight: depth * 20 }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+              <input type="checkbox" checked={node.done} onChange={() => onToggle(path)} className="size-4 accent-indigo-600" />
+              <span className={`text-sm font-medium ${node.done ? "line-through text-slate-400" : "text-slate-800"}`}>
+                {node.title}
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setAdding(!adding)} className="text-xs font-medium text-indigo-600 hover:underline">
+                + زیربخش
+              </button>
+              <button onClick={() => onDelete(path)} className="text-rose-400 hover:text-rose-600 text-xs">
+                🗑️
+              </button>
+            </div>
+          </div>
+
+          {adding && (
+            <div className="mt-3 flex gap-2">
+              <input
+                autoFocus
+                value={subTitle}
+                onChange={e => setSubTitle(e.target.value)}
+                placeholder="عنوان زیربخش..."
+                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none"
+              />
+              <button
+                onClick={() => {
+                  if (subTitle.trim()) {
+                    onAddChild(path, subTitle.trim());
+                    setSubTitle("");
+                    setAdding(false);
+                  }
+                }}
+                className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white"
+              >
+                ثبت
+              </button>
+            </div>
+          )}
+
+          {node.children && node.children.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {node.children.map((ch, idx) => (
+                <FrameworkNode
+                  key={ch.id}
+                  node={ch}
+                  path={[...path, idx]}
+                  depth={depth + 1}
+                  onToggle={onToggle}
+                  onAddChild={onAddChild}
+                  onDelete={onDelete}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۵. یادداشت‌ها (Notes)
+    // -------------------------------------------------------------------------
+    function NotesView() {
+      const { store, updateStore, toast, askConfirm } = useApp();
+      const [openNew, setOpenNew] = useState(false);
+      const [form, setForm] = useState({ title: "", content: "", tag: "ایده" });
+
+      const tagStyles = {
+        "ایده": "bg-indigo-100 text-indigo-700",
+        "مهم": "bg-rose-100 text-rose-700",
+        "سوال": "bg-amber-100 text-amber-700",
+        "عمومی": "bg-slate-100 text-slate-600"
+      };
+
+      const sortedNotes = [...store.notes].sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1));
+
+      return (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">ایده‌ها، لینک مقالات و نکات مهم پژوهشی را اینجا ثبت کنید.</p>
+            <button
+              onClick={() => setOpenNew(!openNew)}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + یادداشت جدید
+            </button>
+          </div>
+
+          {openNew && (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+              <div className="flex gap-2">
+                <input
+                  value={form.title}
+                  onChange={e => setForm({ ...form, title: e.target.value })}
+                  placeholder="عنوان یادداشت..."
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                />
+                <select
+                  value={form.tag}
+                  onChange={e => setForm({ ...form, tag: e.target.value })}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                >
+                  <option>ایده</option>
+                  <option>مهم</option>
+                  <option>سوال</option>
+                  <option>عمومی</option>
                 </select>
+              </div>
+              <textarea
+                rows={4}
+                value={form.content}
+                onChange={e => setForm({ ...form, content: e.target.value })}
+                placeholder="متن یادداشت..."
+                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setOpenNew(false)} className="rounded-lg border px-4 py-1.5 text-sm">انصراف</button>
+                <button
+                  onClick={() => {
+                    if (!form.content.trim()) return;
+                    updateStore(s => ({
+                      ...s,
+                      notes: [{ id: uid(), ...form, pinned: false, updatedAt: new Date().toISOString() }, ...s.notes]
+                    }));
+                    setForm({ title: "", content: "", tag: "ایده" });
+                    setOpenNew(false);
+                    toast("یادداشت ذخیره شد");
+                  }}
+                  className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white"
+                >
+                  ذخیره
+                </button>
+              </div>
+            </div>
+          )}
 
-                <button onclick="saveFeedback('${m.id}')" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium px-3 py-1.5 rounded-lg transition">
-                  ثبت بازخورد استاد
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sortedNotes.map(n => (
+              <div key={n.id} className={`flex flex-col rounded-2xl border bg-white p-4 shadow-sm ${n.pinned ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${tagStyles[n.tag] || tagStyles["عمومی"]}`}>
+                    {n.tag}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateStore(s => ({
+                        ...s,
+                        notes: s.notes.map(x => x.id === n.id ? { ...x, pinned: !x.pinned } : x)
+                      }))}
+                      title="سنجاق کردن"
+                      className="text-sm"
+                    >
+                      {n.pinned ? "📌" : "📍"}
+                    </button>
+                    <button
+                      onClick={() => askConfirm("این یادداشت حذف شود؟", () => updateStore(s => ({ ...s, notes: s.notes.filter(x => x.id !== n.id) })))}
+                      className="text-rose-400 hover:text-rose-600 text-xs"
+                    >
+                      ✖
+                    </button>
+                  </div>
+                </div>
+                {n.title && <p className="mb-1 text-sm font-bold text-slate-800">{n.title}</p>}
+                <textarea
+                  rows={4}
+                  value={n.content}
+                  onChange={e => updateStore(s => ({
+                    ...s,
+                    notes: s.notes.map(x => x.id === n.id ? { ...x, content: e.target.value, updatedAt: new Date().toISOString() } : x)
+                  }))}
+                  className="flex-1 resize-none bg-transparent text-sm leading-6 text-slate-600 outline-none"
+                />
+                <p className="mt-2 text-[11px] text-slate-400">به‌روزرسانی: {formatJalali(n.updatedAt)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۶. جدول زمانی (Timeline)
+    // -------------------------------------------------------------------------
+    function TimelineView() {
+      const { store, updateStore, toast } = useApp();
+      const [openAdd, setOpenAdd] = useState(false);
+      const [form, setForm] = useState({ title: "", date: todayIso(), description: "" });
+      const sorted = [...store.milestones].sort((a, b) => a.date.localeCompare(b.date));
+      const nowIso = todayIso();
+
+      return (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">مهلت‌ها و نقاط عطف کلیدی پایان‌نامه را در تقویم شمسی مدیریت کنید.</p>
+            <button
+              onClick={() => setOpenAdd(!openAdd)}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + رویداد جدید
+            </button>
+          </div>
+
+          {openAdd && (
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <input
+                  value={form.title}
+                  onChange={e => setForm({ ...form, title: e.target.value })}
+                  placeholder="عنوان رویداد (مثلاً تحویل فصل سوم)..."
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                />
+                <JalaliDatePicker value={form.date} onChange={d => setForm({ ...form, date: d })} />
+              </div>
+              <textarea
+                rows={2}
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="توضیحات تکمیلی..."
+                className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm outline-none"
+              />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setOpenAdd(false)} className="rounded-lg border px-4 py-1.5 text-sm">انصراف</button>
+                <button
+                  onClick={() => {
+                    if (!form.title.trim()) return;
+                    updateStore(s => ({
+                      ...s,
+                      milestones: [...s.milestones, { id: uid(), ...form, done: false }]
+                    }));
+                    setForm({ title: "", date: todayIso(), description: "" });
+                    setOpenAdd(false);
+                    toast("رویداد ثبت شد");
+                  }}
+                  className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white"
+                >
+                  ثبت رویداد
+                </button>
+              </div>
+            </div>
+          )}
+
+          <ol className="relative mr-3 space-y-4 border-r-2 border-slate-200 pr-6">
+            {sorted.map(ms => {
+              const isPast = ms.date < nowIso;
+              return (
+                <li key={ms.id} className="relative">
+                  <span
+                    className={`absolute -right-[33px] top-1 flex size-5 items-center justify-center rounded-full border-2 border-white text-[10px] text-white ${
+                      ms.done ? "bg-emerald-500" : isPast ? "bg-rose-500" : "bg-indigo-500"
+                    }`}
+                  >
+                    {ms.done ? "✓" : ""}
+                  </span>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className={`text-sm font-bold ${ms.done ? "line-through text-slate-400" : "text-slate-800"}`}>{ms.title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {formatJalali(ms.date)}
+                        {!ms.done && isPast && <span className="mr-2 text-rose-500 font-bold">· سررسید گذشته</span>}
+                      </p>
+                      {ms.description && <p className="mt-1.5 text-xs text-slate-600">{ms.description}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateStore(s => ({
+                          ...s,
+                          milestones: s.milestones.map(x => x.id === ms.id ? { ...x, done: !x.done } : x)
+                        }))}
+                        className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        {ms.done ? "بازگردانی" : "تکمیل شد"}
+                      </button>
+                      <button
+                        onClick={() => updateStore(s => ({ ...s, milestones: s.milestones.filter(x => x.id !== ms.id) }))}
+                        className="text-rose-400 hover:text-rose-600 text-sm"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // ۷. آماده‌سازی دفاع (Defense)
+    // -------------------------------------------------------------------------
+    function DefenseView() {
+      const { store, updateStore } = useApp();
+      const { defense } = store;
+      const [newCheck, setNewCheck] = useState("");
+      const [member, setMember] = useState({ name: "", role: "", contact: "" });
+
+      const doneCount = defense.checklist.filter(c => c.done).length;
+      const pct = defense.checklist.length ? Math.round((doneCount / defense.checklist.length) * 100) : 0;
+
+      const updateDefense = (patch) => {
+        updateStore(s => ({ ...s, defense: { ...s.defense, ...patch } }));
+      };
+
+      return (
+        <div className="space-y-5">
+          <div className="rounded-2xl bg-gradient-to-l from-slate-800 to-slate-900 p-6 text-white shadow-lg">
+            <p className="text-sm text-slate-300 font-medium">🎓 برنامه‌ریزی و آمادگی جلسه دفاع</p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <span className="mb-1 block text-xs text-slate-300">تاریخ دفاع (شمسی)</span>
+                <JalaliDatePicker dark allowEmpty value={defense.date} onChange={d => updateDefense({ date: d })} />
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs text-slate-300">محل برگزاری / لینک جلسه</span>
+                <input
+                  value={defense.location}
+                  onChange={e => updateDefense({ location: e.target.value })}
+                  placeholder="مثلاً سالن دفاعیه دانشکده..."
+                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400"
+                />
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-indigo-300">تاریخ انتخابی: {formatJalali(defense.date)}</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">چک‌لیست اقدامات قبل از دفاع</h3>
+              <span className="text-sm font-bold text-indigo-600">{toFaDigits(pct)}٪</span>
+            </div>
+            <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <ul className="mb-4 space-y-2">
+              {defense.checklist.map(item => (
+                <li key={item.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-2.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={() => updateDefense({
+                        checklist: defense.checklist.map(c => c.id === item.id ? { ...c, done: !c.done } : c)
+                      })}
+                      className="size-4 accent-indigo-600"
+                    />
+                    <span className={`text-sm ${item.done ? "line-through text-slate-400" : "text-slate-700"}`}>{item.title}</span>
+                  </label>
+                  <button
+                    onClick={() => updateDefense({ checklist: defense.checklist.filter(c => c.id !== item.id) })}
+                    className="text-rose-400 hover:text-rose-600 text-xs"
+                  >
+                    🗑️
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <input
+                value={newCheck}
+                onChange={e => setNewCheck(e.target.value)}
+                placeholder="مورد جدید برای چک‌لیست دفاع..."
+                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+              />
+              <button
+                onClick={() => {
+                  if (!newCheck.trim()) return;
+                  updateDefense({ checklist: [...defense.checklist, { id: uid(), title: newCheck.trim(), done: false }] });
+                  setNewCheck("");
+                }}
+                className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-medium text-white"
+              >
+                + افزودن
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-3 text-sm font-bold text-slate-800">اعضای هیئت داوران و اساتید</h3>
+            {defense.committee.length > 0 && (
+              <ul className="mb-4 space-y-2">
+                {defense.committee.map(c => (
+                  <li key={c.id} className="flex items-center justify-between rounded-xl border border-slate-100 p-2.5">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{c.name}</p>
+                      <p className="text-xs text-slate-400">{c.role} {c.contact ? `· ${c.contact}` : ""}</p>
+                    </div>
+                    <button
+                      onClick={() => updateDefense({ committee: defense.committee.filter(x => x.id !== c.id) })}
+                      className="text-rose-400 hover:text-rose-600 text-xs"
+                    >
+                      🗑️
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <input
+                value={member.name}
+                onChange={e => setMember({ ...member, name: e.target.value })}
+                placeholder="نام استاد"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+              />
+              <input
+                value={member.role}
+                onChange={e => setMember({ ...member, role: e.target.value })}
+                placeholder="سمت (مثلاً داور داخلی / مشاور)"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+              />
+              <div className="flex gap-2">
+                <input
+                  value={member.contact}
+                  onChange={e => setMember({ ...member, contact: e.target.value })}
+                  placeholder="ایمیل / تماس"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none"
+                />
+                <button
+                  onClick={() => {
+                    if (!member.name.trim()) return;
+                    updateDefense({ committee: [...defense.committee, { id: uid(), ...member }] });
+                    setMember({ name: "", role: "", contact: "" });
+                  }}
+                  className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-medium text-white"
+                >
+                  افزودن
                 </button>
               </div>
             </div>
           </div>
-        `;
-        meetingsList.appendChild(card);
-      });
+        </div>
+      );
     }
 
-    // ثبت جلسه جدید
-    document.getElementById('meeting-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('save-meeting-btn');
-      btn.disabled = true;
+    // -------------------------------------------------------------------------
+    // مودال پاسخ به وظیفه (Action Response Modal)
+    // -------------------------------------------------------------------------
+    function ActionResponseModal({ actionId, onClose }) {
+      const { store, updateStore, toast } = useApp();
+      const action = store.actions.find(a => a.id === actionId);
+      const [respText, setRespText] = useState(action?.response || "");
 
-      const user = (await sbClient.auth.getUser()).data.user;
+      useEffect(() => {
+        setRespText(action?.response || "");
+      }, [actionId]);
 
-      const newMeeting = {
-        meeting_date: document.getElementById('m-date').value,
-        title: document.getElementById('m-title').value,
-        summary: document.getElementById('m-summary').value,
-        next_tasks: document.getElementById('m-tasks').value,
-        file_link: document.getElementById('m-link').value,
-        author_email: user ? user.email : ''
+      if (!action) return null;
+      const session = store.sessions.find(s => s.id === action.sessionId);
+
+      const saveResponse = () => {
+        updateStore(s => ({
+          ...s,
+          actions: s.actions.map(a => a.id === action.id ? {
+            ...a,
+            response: respText.trim(),
+            done: true,
+            respondedAt: new Date().toISOString()
+          } : a)
+        }));
+        toast("پاسخ و نتیجه وظیفه ذخیره شد");
+        onClose();
       };
 
-      const { error } = await sbClient.from('meetings').insert([newMeeting]);
-      btn.disabled = false;
-
-      if (error) {
-        alert('خطا در ثبت: ' + error.message);
-      } else {
-        document.getElementById('meeting-form').reset();
-        fetchMeetings();
-      }
-    });
-
-    // ثبت بازخورد استاد
-    async function saveFeedback(id) {
-      const feedback = document.getElementById(`feedback-${id}`).value;
-      const status = document.getElementById(`status-${id}`).value;
-
-      const { error } = await sbClient
-        .from('meetings')
-        .update({ prof_feedback: feedback, status: status })
-        .eq('id', id);
-
-      if (error) {
-        alert('خطا در ذخیره بازخورد: ' + error.message);
-      } else {
-        fetchMeetings();
-      }
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+          <div className="animate-modal w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold text-slate-800">ثبت گزارش انجام وظیفه</h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-700">✖</button>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-sm font-bold text-slate-800">{action.title}</p>
+              <p className="text-xs text-slate-400 mt-1">
+                مرتبط با: {session?.title || "—"} · مسئول: {action.owner ?? "من"}
+              </p>
+            </div>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">توضیحات انجام کار / نتیجه / لینک مستندات:</span>
+              <textarea
+                rows={5}
+                value={respText}
+                onChange={e => setRespText(e.target.value)}
+                placeholder="نتیجه بررسی، خلاصه اقدام انجام‌شده یا لینک فایل مربوطه را وارد کنید..."
+                className="w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-indigo-500"
+              />
+            </label>
+            <div className="flex items-center justify-between pt-2">
+              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={action.done}
+                  onChange={() => updateStore(s => ({
+                    ...s,
+                    actions: s.actions.map(a => a.id === action.id ? { ...a, done: !a.done } : a)
+                  }))}
+                  className="size-4 accent-indigo-600"
+                />
+                <span>علامت‌گذاری به عنوان انجام‌شده</span>
+              </label>
+              <div className="flex gap-2">
+                <button onClick={onClose} className="rounded-xl border px-4 py-2 text-xs font-medium text-slate-600">انصراف</button>
+                <button onClick={saveResponse} className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+                  ثبت و ذخیره
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
     }
 
-    // بررسی ورود اولیه
-    checkUser();
+    // -------------------------------------------------------------------------
+    // پوسته اصلی برنامه (Sidebar + Header + Modals)
+    // -------------------------------------------------------------------------
+    const NAV_ITEMS = [
+      { key: "overview", label: "نمای کلی", sub: "خلاصه وضعیت پیشرفت پایان‌نامه", icon: "📊" },
+      { key: "sessions", label: "جلسات با استاد راهنما", sub: "ثبت خلاصه جلسات، بازخورد استاد و وظایف", icon: "👥" },
+      { key: "writing", label: "نگارش فصول", sub: "پیگیری پیشرفت نگارش هر فصل", icon: "✍️" },
+      { key: "framework", label: "چارچوب و ساختار", sub: "ساختار کلی و اجزای پایان‌نامه", icon: "🌿" },
+      { key: "notes", label: "یادداشت‌ها", sub: "ایده‌ها و نکات مهم", icon: "📝" },
+      { key: "timeline", label: "جدول زمانی", sub: "رویدادها و مهلت‌های کلیدی", icon: "📅" },
+      { key: "defense", label: "آماده‌سازی دفاع", sub: "چک‌لیست و اطلاعات جلسه دفاع", icon: "🎓" }
+    ];
+
+    function MainShell() {
+      const { store, updateStore, syncStatus, toasts, confirmDialog, setConfirmDialog, user, onLogout, toast } = useApp();
+      const [view, setView] = useState("overview");
+      const [sidebarOpen, setSidebarOpen] = useState(false);
+      const [activeActionId, setActiveActionId] = useState(null);
+      const [quickModal, setQuickModal] = useState(null);
+      const [searchOpen, setSearchOpen] = useState(false);
+      const [searchQuery, setSearchQuery] = useState("");
+      const [highlightSessionId, setHighlightSessionId] = useState(null);
+      const fileInputRef = useRef(null);
+
+      const currentNav = NAV_ITEMS.find(n => n.key === view) || NAV_ITEMS[0];
+
+      const handleExport = () => {
+        const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `thesis-backup-${todayIso()}.json`;
+        a.click();
+        toast("فایل پشتیبان دانلود شد");
+      };
+
+      const handleImport = (file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            if (parsed.sessions && parsed.chapters) {
+              updateStore(parsed);
+              toast("فایل پشتیبان با موفقیت بازیابی و همگام شد");
+            }
+          } catch {
+            toast("فایل پشتیبان نامعتبر است", "err");
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      const statusBadge = {
+        live: { text: "همگام‌سازی ابری فعال (آنلاین)", cls: "bg-teal-700" },
+        saving: { text: "در حال ذخیره در ابر...", cls: "bg-indigo-600" },
+        connecting: { text: "در حال اتصال به دیتابیس...", cls: "bg-slate-500" },
+        error: { text: "ذخیره محلی (جدول thesis_store را در Supabase بسازید)", cls: "bg-amber-700" }
+      }[syncStatus];
+
+      return (
+        <div className="min-h-screen md:flex">
+          {/* سایدبار راست */}
+          {sidebarOpen && <div className="fixed inset-0 z-40 bg-slate-900/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
+          <aside className={`fixed inset-y-0 right-0 z-50 w-72 shrink-0 border-l border-slate-200 bg-white transition-transform duration-200 md:static md:w-64 md:translate-x-0 flex flex-col justify-between ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
+            <div>
+              <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-700 text-white shadow-md">🎓</div>
+                  <div>
+                    <p className="text-sm font-extrabold text-slate-800">گزارش کار</p>
+                    <p className="text-[11px] text-slate-400">پورتال مشترک پایان‌نامه</p>
+                  </div>
+                </div>
+                <button onClick={() => setSidebarOpen(false)} className="text-slate-400 md:hidden">✖</button>
+              </div>
+
+              <nav className="flex flex-col gap-1 p-3">
+                {NAV_ITEMS.map(item => {
+                  const active = view === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => { setView(item.key); setSidebarOpen(false); }}
+                      className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
+                        active ? "bg-indigo-50 text-indigo-700 font-bold" : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            <div className="border-t border-slate-100 p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span className="truncate font-mono" dir="ltr">{user.email}</span>
+                <button onClick={onLogout} className="text-rose-600 font-bold hover:underline shrink-0">خروج</button>
+              </div>
+              <p className="text-[11px] leading-5 text-slate-400">
+                تمامی تغییرات به‌صورت خودکار در دیتابیس آنلاین ذخیره شده و بین استاد و دانشجو مشترک است.
+              </p>
+            </div>
+          </aside>
+
+          {/* محتوای اصلی */}
+          <div className="flex-1 min-w-0">
+            <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur md:px-6">
+              <button onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden">☰</button>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-base font-bold text-slate-800 md:text-lg">{currentNav.label}</h1>
+                <p className="hidden truncate text-xs text-slate-400 sm:block">{currentNav.sub}</p>
+              </div>
+
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
+              >
+                <span>🔍 جستجو</span>
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleExport}
+                  className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  ⬇️ پشتیبان
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  ⬆️ بازیابی
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])}
+                />
+              </div>
+            </header>
+
+            <main className="px-4 py-6 pb-24 md:px-6 max-w-6xl mx-auto">
+              {view === "overview" && (
+                <OverviewView
+                  onNavigate={setView}
+                  onOpenModal={setQuickModal}
+                  onOpenResponse={setActiveActionId}
+                />
+              )}
+              {view === "sessions" && (
+                <SessionsView
+                  onOpenResponse={setActiveActionId}
+                  highlightId={highlightSessionId}
+                  clearHighlight={() => setHighlightSessionId(null)}
+                />
+              )}
+              {view === "writing" && <WritingView />}
+              {view === "framework" && <FrameworkView />}
+              {view === "notes" && <NotesView />}
+              {view === "timeline" && <TimelineView />}
+              {view === "defense" && <DefenseView />}
+            </main>
+          </div>
+
+          {/* نشانگر وضعیت اتصال ابری */}
+          <div className={`fixed bottom-3 left-3 z-40 rounded-full px-3.5 py-1.5 text-[11px] font-medium text-white shadow-lg ${statusBadge.cls}`}>
+            {statusBadge.text}
+          </div>
+
+          {/* مودال ثبت پاسخ وظیفه */}
+          {activeActionId && (
+            <ActionResponseModal actionId={activeActionId} onClose={() => setActiveActionId(null)} />
+          )}
+
+          {/* مودال جستجو */}
+          {searchOpen && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-20" onClick={() => setSearchOpen(false)}>
+              <div className="animate-modal w-full max-w-xl rounded-2xl bg-white p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-2 border-b pb-3">
+                  <span>🔍</span>
+                  <input
+                    autoFocus
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="جستجو در جلسات، وظایف، یادداشت‌ها..."
+                    className="flex-1 text-sm outline-none"
+                  />
+                  <button onClick={() => setSearchOpen(false)} className="text-slate-400">✖</button>
+                </div>
+                <div className="max-h-80 overflow-y-auto py-2 space-y-1">
+                  {searchQuery.trim() === "" ? (
+                    <p className="py-6 text-center text-xs text-slate-400">عبارت مورد نظر را تایپ کنید...</p>
+                  ) : (
+                    <>
+                      {store.sessions.filter(s => (s.title + s.summary).includes(searchQuery)).map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => { setView("sessions"); setHighlightSessionId(s.id); setSearchOpen(false); }}
+                          className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-right hover:bg-slate-50 text-sm"
+                        >
+                          <span>👥 {s.title}</span>
+                          <span className="text-xs text-slate-400">{formatJalali(s.date)}</span>
+                        </button>
+                      ))}
+                      {store.actions.filter(a => a.title.includes(searchQuery)).map(a => (
+                        <button
+                          key={a.id}
+                          onClick={() => { setActiveActionId(a.id); setSearchOpen(false); }}
+                          className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-right hover:bg-slate-50 text-sm"
+                        >
+                          <span>📋 {a.title}</span>
+                          <span className="text-xs text-slate-400">{a.done ? "انجام‌شده" : "باز"}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* دیالوگ تایید حذف */}
+          {confirmDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setConfirmDialog(null)}>
+              <div className="animate-modal w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-base font-bold text-slate-800 mb-2">⚠️ تایید عملیات</h3>
+                <p className="text-sm text-slate-600 mb-6">{confirmDialog.message}</p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setConfirmDialog(null)} className="rounded-lg border px-4 py-2 text-xs font-medium">انصراف</button>
+                  <button
+                    onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}
+                    className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700"
+                  >
+                    تایید و حذف
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* اعلان‌ها (Toasts) */}
+          <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+            {toasts.map(t => (
+              <div key={t.id} className={`rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-lg ${t.type === "err" ? "bg-rose-600" : "bg-emerald-600"}`}>
+                {t.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // کامپوننت ریشه و صفحه لاگین
+    // -------------------------------------------------------------------------
+    function RootApp() {
+      const [user, setUser] = useState(null);
+      const [checking, setChecking] = useState(true);
+      const [email, setEmail] = useState("");
+      const [password, setPassword] = useState("");
+      const [loading, setLoading] = useState(false);
+      const [err, setErr] = useState("");
+
+      useEffect(() => {
+        sbClient.auth.getSession().then(({ data: { session } }) => {
+          setUser(session?.user || null);
+          setChecking(false);
+        });
+      }, []);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setErr("");
+        const { data, error } = await sbClient.auth.signInWithPassword({ email: email.trim(), password });
+        setLoading(false);
+        if (error) {
+          setErr("ایمیل یا رمز عبور اشتباه است.");
+        } else {
+          setUser(data.user);
+        }
+      };
+
+      const handleLogout = async () => {
+        await sbClient.auth.signOut();
+        setUser(null);
+      };
+
+      if (checking) {
+        return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">در حال بارگذاری...</div>;
+      }
+
+      if (!user) {
+        return (
+          <div className="flex min-h-screen items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-indigo-50">
+            <form onSubmit={handleLogin} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl border border-slate-100">
+              <div className="text-center">
+                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-indigo-700 text-white text-2xl shadow-md">🎓</div>
+                <h1 className="text-xl font-extrabold text-slate-800">پورتال جامع پایان‌نامه</h1>
+                <p className="text-xs text-slate-400 mt-1">ورود مشترک استاد راهنما و دانشجو</p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">ایمیل کاربری</label>
+                <input
+                  type="email"
+                  required
+                  dir="ltr"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="example@gmail.com"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">رمز عبور</label>
+                <input
+                  type="password"
+                  required
+                  dir="ltr"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-600"
+                />
+              </div>
+              {err && <p className="text-xs text-rose-600 text-center font-medium">{err}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-indigo-700 hover:bg-indigo-800 py-2.5 text-sm font-bold text-white transition shadow-md"
+              >
+                {loading ? "در حال ورود..." : "ورود به سامانه"}
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      return (
+        <AppProvider user={user} onLogout={handleLogout}>
+          <MainShell />
+        </AppProvider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<RootApp />);
   </script>
 </body>
 </html>
