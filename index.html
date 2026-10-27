@@ -36,7 +36,7 @@
     const MAX_FILE_SIZE = 25 * 1024 * 1024; // ۲۵ مگابایت
 
     // -------------------------------------------------------------------------
-    // توابع کمکی تاریخ شمسی، اعداد فارسی و حجم فایل
+    // توابع کمکی تاریخ شمسی، اعداد فارسی و مدیریت باز کردن صحیح فایل‌ها
     // -------------------------------------------------------------------------
     const JALALI_MONTHS = ["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
     const toFaDigits = (n) => String(n ?? "").replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]);
@@ -47,6 +47,70 @@
       if (bytes < 1024) return `${toFaDigits(bytes)} بایت`;
       if (bytes < 1024 * 1024) return `${toFaDigits((bytes / 1024).toFixed(1))} کیلوبایت`;
       return `${toFaDigits((bytes / (1024 * 1024)).toFixed(1))} مگابایت`;
+    }
+
+    // تشخیص MIME Type صحیح بر اساس پسوند فایل
+    function getMimeType(filename, fallbackType) {
+      const ext = (filename || "").split(".").pop().toLowerCase();
+      if (ext === "html" || ext === "htm") return "text/html;charset=utf-8";
+      if (ext === "pdf") return "application/pdf";
+      if (ext === "txt" || ext === "md" || ext === "csv") return "text/plain;charset=utf-8";
+      if (ext === "json") return "application/json;charset=utf-8";
+      if (ext === "png") return "image/png";
+      if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+      if (ext === "svg") return "image/svg+xml";
+      return fallbackType || "application/octet-stream";
+    }
+
+    // باز کردن صحیح فایل‌های HTML و سایر مستندات با پشتیبانی کامل از UTF-8
+    async function openAttachmentProperly(att, forceDownload = false) {
+      const rawUrl = att.url || att.dataUrl;
+      if (!rawUrl) return;
+
+      const isHtml = /\.(html|htm)$/i.test(att.name || "") || (att.type && att.type.includes("html"));
+      const mime = getMimeType(att.name, att.type);
+
+      try {
+        // اگر فایل DataURL (Base64) باشد
+        if (rawUrl.startsWith("data:")) {
+          const res = await fetch(rawUrl);
+          const buf = await res.arrayBuffer();
+          const blob = new Blob([buf], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+          if (forceDownload) {
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = att.name || "file";
+            a.click();
+          } else {
+            window.open(blobUrl, "_blank");
+          }
+          return;
+        }
+
+        // اگر فایل HTML یا متنی روی Supabase Storage باشد یا کاربر دانلود بخواهد
+        if (isHtml || forceDownload) {
+          const res = await fetch(rawUrl);
+          const buf = await res.arrayBuffer();
+          const blob = new Blob([buf], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+
+          if (forceDownload) {
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = att.name || "file";
+            a.click();
+          } else {
+            window.open(blobUrl, "_blank");
+          }
+          return;
+        }
+
+        // سایر فایل‌ها (PDF، تصویر و...) در تب جدید باز شوند
+        window.open(rawUrl, "_blank");
+      } catch (e) {
+        window.open(rawUrl, "_blank");
+      }
     }
 
     function gregorianToJalali(gy, gm, gd) {
@@ -108,7 +172,7 @@
       return new Date().toISOString().slice(0, 10);
     }
 
-    // آپلود فایل در Supabase Storage (و در صورت عدم وجود باکت، ذخیره Base64)
+    // آپلود فایل با تعیین دقیق Content-Type
     async function uploadAttachmentFile(file) {
       if (file.size > MAX_FILE_SIZE) {
         throw new Error("حجم فایل بیشتر از ۲۵ مگابایت است.");
@@ -116,11 +180,15 @@
 
       const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
       const safePath = `uploads/${Date.now()}_${uid()}.${ext}`;
+      const mimeType = getMimeType(file.name, file.type);
 
-      // تلاش اول: آپلود در باکت Supabase Storage
       const { data, error } = await sbClient.storage
         .from("thesis-files")
-        .upload(safePath, file, { cacheControl: "3600", upsert: false });
+        .upload(safePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: mimeType
+        });
 
       if (!error && data) {
         const { data: pubData } = sbClient.storage.from("thesis-files").getPublicUrl(safePath);
@@ -128,14 +196,13 @@
           id: uid(),
           name: file.name,
           size: file.size,
-          type: file.type,
+          type: mimeType,
           url: pubData.publicUrl,
           storagePath: safePath,
           addedAt: new Date().toISOString()
         };
       }
 
-      // تلاش دوم (پشتیبان خودکار): تبدیل به DataURL برای فایل‌های تا ۵ مگابایت اگر باکت ساخته نشده باشد
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("برای فایل‌های بالای ۵ مگابایت، لطفاً کد SQL ساخت باکت thesis-files را در Supabase اجرا کنید.");
       }
@@ -147,7 +214,7 @@
             id: uid(),
             name: file.name,
             size: file.size,
-            type: file.type,
+            type: mimeType,
             url: reader.result,
             addedAt: new Date().toISOString()
           });
@@ -155,6 +222,44 @@
         reader.onerror = () => reject(new Error("خطا در خواندن فایل"));
         reader.readAsDataURL(file);
       });
+    }
+
+    // -------------------------------------------------------------------------
+    // کامپوننت نمایش دکمه مشاهده و دانلود هر فایل پیوست
+    // -------------------------------------------------------------------------
+    function AttachmentChip({ att, onRemove }) {
+      const isHtml = /\.(html|htm)$/i.test(att.name || "");
+      return (
+        <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-1.5 text-xs shadow-sm">
+          <button
+            type="button"
+            onClick={() => openAttachmentProperly(att, false)}
+            className="font-bold text-indigo-700 hover:text-indigo-900 hover:underline truncate max-w-[15rem] text-right"
+            title={isHtml ? "مشاهده صفحه وب تعاملی در تب جدید" : "مشاهده فایل"}
+          >
+            {isHtml ? "🌐 " : "📄 "}{att.name}
+          </button>
+          {att.size && <span className="text-[10px] text-slate-400">({formatFileSize(att.size)})</span>}
+          <button
+            type="button"
+            onClick={() => openAttachmentProperly(att, true)}
+            className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200"
+            title="دانلود مستقیم فایل"
+          >
+            ⬇️ دانلود
+          </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-rose-400 hover:text-rose-600 font-bold mr-0.5"
+              title="حذف فایل"
+            >
+              ✖
+            </button>
+          )}
+        </div>
+      );
     }
 
     // -------------------------------------------------------------------------
@@ -336,7 +441,6 @@
           if (!mounted) return;
 
           if (error) {
-            console.warn("Supabase fetch notice:", error.message);
             setSyncStatus("error");
             return;
           }
@@ -569,7 +673,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // ۲. بخش جلسات با استاد راهنما + بارگذاری فایل برای تکالیف و جلسات
+    // ۲. بخش جلسات با استاد راهنما + بارگذاری و اجرای صحیح فایل‌ها
     // -------------------------------------------------------------------------
     function SessionsView({ onOpenResponse, highlightId, clearHighlight }) {
       const { store, updateStore, toast } = useApp();
@@ -661,7 +765,6 @@
       );
     }
 
-    // ردیف هر اقدام/تکلیف به همراه دکمه بارگذاری مستقیم فایل و نمایش فایل‌های ضمیمه‌شده
     function ActionRow({ action, onOpenResponse, canDelete }) {
       const { updateStore, askConfirm, toast } = useApp();
       const fileInputRef = useRef(null);
@@ -747,12 +850,11 @@
 
               {action.dueDate && <span className="text-[11px] text-slate-400">{formatJalali(action.dueDate)}</span>}
 
-              {/* دکمه بارگذاری مستقیم فایل روی تکلیف */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
-                title="پیوست فایل (مقاله، گزارش، کد، تصویر...)"
+                title="پیوست فایل (HTML، PDF، Word، کد، تصویر...)"
               >
                 <span>📎 {uploading ? "در حال آپلود..." : "بارگذاری فایل"}</span>
               </button>
@@ -778,7 +880,6 @@
             </div>
           </div>
 
-          {/* نمایش پاسخ متنی در صورت وجود */}
           {action.response && (
             <div className="text-xs text-emerald-800 bg-emerald-50/90 px-3 py-2 rounded-lg border border-emerald-200/60">
               <strong className="block mb-0.5">پاسخ / نتیجه انجام کار:</strong>
@@ -786,32 +887,14 @@
             </div>
           )}
 
-          {/* نمایش لیست فایل‌های پیوست‌شده به این تکلیف */}
           {attachments.length > 0 && (
             <div className="pt-1 flex flex-wrap gap-2">
               {attachments.map(att => (
-                <div
+                <AttachmentChip
                   key={att.id}
-                  className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-2.5 py-1 text-xs shadow-sm"
-                >
-                  <a
-                    href={att.url || att.dataUrl}
-                    download={att.name}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-indigo-700 hover:underline truncate max-w-[14rem]"
-                  >
-                    📄 {att.name}
-                  </a>
-                  {att.size && <span className="text-[10px] text-slate-400">({formatFileSize(att.size)})</span>}
-                  <button
-                    onClick={() => removeAttachment(att.id)}
-                    className="text-rose-400 hover:text-rose-600 font-bold"
-                    title="حذف فایل"
-                  >
-                    ✖
-                  </button>
-                </div>
+                  att={att}
+                  onRemove={() => removeAttachment(att.id)}
+                />
               ))}
             </div>
           )}
@@ -846,7 +929,6 @@
         }));
       };
 
-      // آپلود فایل هنگام تعریف اقدام جدید
       const handleSelectNewActFile = async (e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
@@ -885,7 +967,6 @@
         toast("اقدام جدید ثبت شد");
       };
 
-      // آپلود فایل مستقیم برای کل جلسه
       const handleSessionFileUpload = async (e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
@@ -997,7 +1078,6 @@
                 className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
               />
 
-              {/* پیگیری جلسه قبل */}
               {prev && (
                 <>
                   <SectionBanner title="اقدامات انجام‌شده از جلسه قبل" count={prevDone.length} tone="from-teal-700 to-teal-800" />
@@ -1020,7 +1100,6 @@
                 </>
               )}
 
-              {/* تصمیمات و بازخورد استاد */}
               <SectionBanner title="تصمیم‌ها و موارد توافق‌شده" tone="from-indigo-600 to-indigo-700" />
               <textarea
                 rows={2}
@@ -1039,7 +1118,6 @@
                 className="w-full rounded-xl border border-amber-200 bg-amber-50/30 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
               />
 
-              {/* سوالات جلسه */}
               <SectionBanner title="سوالات و ابهامات مطرح‌شده" count={questions.length} tone="from-slate-500 to-slate-600" />
               <div className="space-y-3">
                 {questions.map(q => (
@@ -1090,7 +1168,6 @@
                 </div>
               </div>
 
-              {/* اقدامات و تکالیف تا جلسه بعد + بارگذاری فایل */}
               <SectionBanner title="اقداماتی که باید تا جلسه بعد انجام شود (به همراه بارگذاری فایل)" count={sessionActions.length} tone="from-indigo-700 to-indigo-800" />
               {sessionActions.length > 0 && (
                 <ul className="mb-4 space-y-2.5">
@@ -1100,7 +1177,6 @@
                 </ul>
               )}
 
-              {/* فرم افزودن اقدام جدید به همراه آپلود فایل پیوست */}
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-3">
                 <input
                   value={newActTitle}
@@ -1109,14 +1185,14 @@
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
                 />
 
-                {/* نمایش فایل‌های انتخاب‌شده برای اقدام جدید */}
                 {newActFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {newActFiles.map(f => (
-                      <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-indigo-200 px-2.5 py-1 text-xs text-indigo-700">
-                        📄 {f.name} ({formatFileSize(f.size)})
-                        <button onClick={() => setNewActFiles(prev => prev.filter(x => x.id !== f.id))} className="text-rose-500 font-bold">✖</button>
-                      </span>
+                      <AttachmentChip
+                        key={f.id}
+                        att={f}
+                        onRemove={() => setNewActFiles(prev => prev.filter(x => x.id !== f.id))}
+                      />
                     ))}
                   </div>
                 )}
@@ -1158,11 +1234,10 @@
                 </div>
               </div>
 
-              {/* فایل‌های پیوست کل جلسه */}
               <SectionBanner title="فایل‌های پیوست و مستندات جلسه" count={sessionAttachments.length} tone="from-slate-500 to-slate-600" />
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت (PDF، Word، عکس، ZIP و...)</span>
+                  <span className="text-xs text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت (HTML تعاملی، PDF، Word، عکس، ZIP و...)</span>
                   <button
                     onClick={() => sessionFileRef.current?.click()}
                     disabled={uploadingSessionFile}
@@ -1179,30 +1254,15 @@
                 </div>
 
                 {sessionAttachments.length > 0 && (
-                  <ul className="space-y-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {sessionAttachments.map(att => (
-                      <li key={att.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                        <a
-                          href={att.url || att.dataUrl}
-                          download={att.name}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-indigo-700 hover:underline truncate"
-                        >
-                          📄 {att.name}
-                        </a>
-                        <div className="flex items-center gap-3 text-slate-400">
-                          <span>{formatFileSize(att.size)}</span>
-                          <button
-                            onClick={() => updateField({ attachments: sessionAttachments.filter(x => x.id !== att.id) })}
-                            className="text-rose-500 hover:text-rose-700"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </li>
+                      <AttachmentChip
+                        key={att.id}
+                        att={att}
+                        onRemove={() => updateField({ attachments: sessionAttachments.filter(x => x.id !== att.id) })}
+                      />
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
 
@@ -1991,7 +2051,6 @@
               />
             </label>
 
-            {/* بخش آپلود فایل پیوست در مودال */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-600">فایل‌های پیوست این تکلیف:</span>
@@ -2005,32 +2064,22 @@
                 </button>
                 <input ref={fileRef} type="file" className="hidden" onChange={handleUploadInModal} />
               </div>
-              <p className="mb-2 text-[11px] text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت</p>
+              <p className="mb-2 text-[11px] text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت (فایل‌های HTML به صورت صفحه وب کامل باز می‌شوند)</p>
 
               {attachments.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-400">
                   فایلی پیوست نشده است.
                 </p>
               ) : (
-                <ul className="space-y-1.5 max-h-36 overflow-y-auto">
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
                   {attachments.map(att => (
-                    <li key={att.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
-                      <a
-                        href={att.url || att.dataUrl}
-                        download={att.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-medium text-indigo-700 hover:underline truncate"
-                      >
-                        📄 {att.name}
-                      </a>
-                      <div className="flex items-center gap-2 text-slate-400 shrink-0">
-                        <span>{formatFileSize(att.size)}</span>
-                        <button onClick={() => removeAtt(att.id)} className="text-rose-500 hover:text-rose-700">🗑️</button>
-                      </div>
-                    </li>
+                    <AttachmentChip
+                      key={att.id}
+                      att={att}
+                      onRemove={() => removeAtt(att.id)}
+                    />
                   ))}
-                </ul>
+                </div>
               )}
             </div>
 
