@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>سامانه جلسات و هدایت پایان‌نامه</title>
+  <title>پورتال جلسات و هدایت پایان‌نامه</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- کتابخانه کلاینت دیتابیس آنلاین Supabase -->
+  <!-- کتابخانه رسمی Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
   <style>
@@ -23,8 +23,8 @@
       </div>
       <form id="login-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">ایمیل دانشگاهی / کاربری</label>
-          <input type="email" id="email" required dir="ltr" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-sm font-medium text-slate-700 mb-1">ایمیل کاربری</label>
+          <input type="email" id="email" required dir="ltr" placeholder="example@gmail.com" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">رمز عبور</label>
@@ -38,9 +38,9 @@
     </div>
   </div>
 
-  <!-- داشبورد اصلی (بعد از لاگین) -->
+  <!-- داشبورد اصلی (پس از ورود موفق) -->
   <div id="app-section" class="hidden">
-    <!-- هدر -->
+    <!-- نوار بالا -->
     <header class="bg-white border-b sticky top-0 z-10">
       <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -55,7 +55,7 @@
     </header>
 
     <main class="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-      <!-- ستون ثبت جلسه جدید (مخصوص ثبت توسط دانشجو یا استاد) -->
+      <!-- ستون ثبت جلسه جدید -->
       <div class="md:col-span-1">
         <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm sticky top-24">
           <h3 class="font-bold text-slate-800 mb-4 pb-2 border-b">ثبت صورت‌جلسه جدید</h3>
@@ -66,15 +66,15 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">موضوع / محور گفتگو</label>
-              <input type="text" id="m-title" placeholder="بررسی فصل سوم و مدل‌سازی" required class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500">
+              <input type="text" id="m-title" placeholder="بررسی ادبیات تحقیق و مدل‌سازی" required class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500">
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">خلاصه گزارش و کارهای انجام‌شده</label>
-              <textarea id="m-summary" rows="3" required placeholder="توضیح کارهای انجام گرفته..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
+              <textarea id="m-summary" rows="3" required placeholder="شرح کارهایی که تا این جلسه تکمیل شده..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">تکالیف جلسه بعد (Action Items)</label>
-              <textarea id="m-tasks" rows="2" placeholder="اصلاح فرمول ۳، ارسال پیش‌نویس به استاد..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">تکالیف و اهداف جلسه بعدی</label>
+              <textarea id="m-tasks" rows="2" placeholder="موارد مشخص‌شده برای جلسه آینده..." class="w-full text-sm px-3 py-2 border rounded-lg outline-none focus:border-indigo-500"></textarea>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">لینک فایل / پیش‌نویس (Google Drive، Overleaf و...)</label>
@@ -87,7 +87,7 @@
         </div>
       </div>
 
-      <!-- ستون لیست جلسات و فیدبک استاد -->
+      <!-- ستون تاریخچه جلسات -->
       <div class="md:col-span-2 space-y-4">
         <div class="flex items-center justify-between mb-2">
           <h3 class="font-bold text-slate-800">تاریخچه جلسات و ارزیابی‌ها</h3>
@@ -101,15 +101,13 @@
   </div>
 
   <script>
-    // -------------------------------------------------------------------------
-    // ۱. اطلاعات اتصال به دیتابیس Supabase خود را اینجا قرار دهید:
-    // -------------------------------------------------------------------------
-    const SUPABASE_URL = "https://lyawmmkqulaetesdcxzn.supabase.co/rest/v1/";
+    // اطلاعات اختصاصی پروژه و دسترسی دیتابیس Supabase
+    const SUPABASE_URL = "https://lyawmmkqulaetesdcxzn.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_sE2ZYOMNRbaEUW7JTbwLCQ_-Yih9NBI";
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ساخت کلاینت پایگاه داده
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // المنت‌ها
     const authSection = document.getElementById('auth-section');
     const appSection = document.getElementById('app-section');
     const loginForm = document.getElementById('login-form');
@@ -118,9 +116,9 @@
     const meetingsList = document.getElementById('meetings-list');
     const loading = document.getElementById('loading');
 
-    // چک کردن نشست کاربر هنگام لود صفحه
+    // بررسی وضعیت نشست کاربر
     async function checkUser() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sbClient.auth.getSession();
       if (session) {
         showApp(session.user);
       } else {
@@ -140,10 +138,10 @@
       fetchMeetings();
     }
 
-    // ورود به سیستم
+    // ورود
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = document.getElementById('email').value;
+      const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       const btn = document.getElementById('login-btn');
       
@@ -151,12 +149,12 @@
       btn.innerText = 'در حال اعتبارسنجی...';
       authError.classList.add('hidden');
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
       btn.disabled = false;
       btn.innerText = 'ورود به سامانه';
 
       if (error) {
-        authError.innerText = 'اطلاعات ورود اشتباه است یا دسترسی تایید نشده است.';
+        authError.innerText = 'اطلاعات ورود اشتباه است یا کاربر تعریف نشده است.';
         authError.classList.remove('hidden');
       } else {
         showApp(data.user);
@@ -165,16 +163,16 @@
 
     // خروج
     async function handleLogout() {
-      await supabase.auth.signOut();
+      await sbClient.auth.signOut();
       showAuth();
     }
 
-    // واکشی جلسات از دیتابیس آنلاین
+    // دریافت لیست جلسات از دیتابیس آنلاین
     async function fetchMeetings() {
       loading.classList.remove('hidden');
       meetingsList.innerHTML = '';
 
-      const { data: meetings, error } = await supabase
+      const { data: meetings, error } = await sbClient
         .from('meetings')
         .select('*')
         .order('created_at', { ascending: false });
@@ -182,12 +180,12 @@
       loading.classList.add('hidden');
 
       if (error) {
-        meetingsList.innerHTML = `<p class="text-rose-500 text-xs">خطا در بارگذاری: ${error.message}</p>`;
+        meetingsList.innerHTML = `<p class="text-rose-500 text-xs">خطا در دریافت اطلاعات: ${error.message}</p>`;
         return;
       }
 
-      if (meetings.length === 0) {
-        meetingsList.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 border border-dashed">هنوز جلسه‌ای ثبت نشده است.</div>`;
+      if (!meetings || meetings.length === 0) {
+        meetingsList.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 border border-dashed">هنوز جلسه‌ای ثبت نشده است. اولین جلسه را از فرم کناری ثبت کنید.</div>`;
         return;
       }
 
@@ -217,7 +215,7 @@
 
           ${m.next_tasks ? `
             <div class="text-xs text-slate-600">
-              <strong class="text-slate-700">تکالیف بعدی:</strong> ${m.next_tasks}
+              <strong class="text-slate-700">تکالیف جلسه بعد:</strong> ${m.next_tasks}
             </div>` : ''}
 
           ${m.file_link ? `
@@ -227,11 +225,11 @@
               </a>
             </div>` : ''}
 
-          <!-- بخش فیدبک و تغییر وضعیت توسط استاد راهنما -->
+          <!-- بخش بازخورد و تغییر وضعیت توسط استاد راهنما -->
           <div class="pt-3 border-t border-slate-100">
-            <label class="block text-xs font-semibold text-slate-700 mb-1">بازخورد استاد راهنما / وضعیت:</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">بازخورد و وضعیت ارزیابی استاد راهنما:</label>
             <div class="flex flex-col gap-2">
-              <textarea id="feedback-${m.id}" rows="2" placeholder="استاد محترم نظر و اصلاحات را اینجا وارد فرمایید..." 
+              <textarea id="feedback-${m.id}" rows="2" placeholder="استاد محترم بازخورد و اصلاحات را در این قسمت وارد فرمایید..." 
                 class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-indigo-500 bg-white">${m.prof_feedback || ''}</textarea>
               
               <div class="flex items-center justify-between">
@@ -242,7 +240,7 @@
                 </select>
 
                 <button onclick="saveFeedback('${m.id}')" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium px-3 py-1.5 rounded-lg transition">
-                  ذخیره بازخورد
+                  ثبت بازخورد استاد
                 </button>
               </div>
             </div>
@@ -258,7 +256,7 @@
       const btn = document.getElementById('save-meeting-btn');
       btn.disabled = true;
 
-      const user = (await supabase.auth.getUser()).data.user;
+      const user = (await sbClient.auth.getUser()).data.user;
 
       const newMeeting = {
         meeting_date: document.getElementById('m-date').value,
@@ -266,10 +264,10 @@
         summary: document.getElementById('m-summary').value,
         next_tasks: document.getElementById('m-tasks').value,
         file_link: document.getElementById('m-link').value,
-        author_email: user.email
+        author_email: user ? user.email : ''
       };
 
-      const { error } = await supabase.from('meetings').insert([newMeeting]);
+      const { error } = await sbClient.from('meetings').insert([newMeeting]);
       btn.disabled = false;
 
       if (error) {
@@ -280,12 +278,12 @@
       }
     });
 
-    // ذخیره بازخورد استاد
+    // ثبت بازخورد استاد
     async function saveFeedback(id) {
       const feedback = document.getElementById(`feedback-${id}`).value;
       const status = document.getElementById(`status-${id}`).value;
 
-      const { error } = await supabase
+      const { error } = await sbClient
         .from('meetings')
         .update({ prof_feedback: feedback, status: status })
         .eq('id', id);
@@ -297,7 +295,7 @@
       }
     }
 
-    // بررسی ورود در آغاز
+    // بررسی ورود اولیه
     checkUser();
   </script>
 </body>
