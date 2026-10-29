@@ -4,14 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>سامانه جامع گزارش کار و پیگیری پایان‌نامه</title>
+  
+  <!-- استایل‌ها و فونت استاندارد وزیرمتن از شبکه توزیع پایدار و سریع -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Misc/Farsi-Digits/Vazirmatn-FD-font-face.css" rel="stylesheet" />
+
   <style>
-    body { font-family: 'Vazirmatn', sans-serif; background-color: #f4f5f9; }
+    :root {
+      --font-fa: 'Vazirmatn FD', 'Vazirmatn', system-ui, sans-serif;
+    }
+    body {
+      font-family: var(--font-fa);
+      background-color: #f4f5f9;
+      letter-spacing: 0;
+    }
+    input, select, textarea, button {
+      font-family: inherit;
+    }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #c7cbe0; border-radius: 999px; }
@@ -27,16 +42,16 @@
     const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
 
     // -------------------------------------------------------------------------
-    // تنظیمات اتصال به دیتابیس آنلاین Supabase شما
+    // اطلاعات اتصال به پروژه آنلاین Supabase
     // -------------------------------------------------------------------------
     const SUPABASE_URL = "https://lyawmmkqulaetesdcxzn.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_sE2ZYOMNRbaEUW7JTbwLCQ_-Yih9NBI";
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const MAX_FILE_SIZE = 25 * 1024 * 1024; // ۲۵ مگابایت
+    const MAX_FILE_SIZE = 25 * 1024 * 1024; // سقف حجم هر فایل: ۲۵ مگابایت
 
     // -------------------------------------------------------------------------
-    // توابع کمکی تاریخ شمسی، اعداد فارسی و مدیریت باز کردن صحیح فایل‌ها
+    // توابع تبدیل تقویم شمسی و اعداد فارسی
     // -------------------------------------------------------------------------
     const JALALI_MONTHS = ["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
     const toFaDigits = (n) => String(n ?? "").replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]);
@@ -49,7 +64,6 @@
       return `${toFaDigits((bytes / (1024 * 1024)).toFixed(1))} مگابایت`;
     }
 
-    // تشخیص MIME Type صحیح بر اساس پسوند فایل
     function getMimeType(filename, fallbackType) {
       const ext = (filename || "").split(".").pop().toLowerCase();
       if (ext === "html" || ext === "htm") return "text/html;charset=utf-8";
@@ -62,7 +76,7 @@
       return fallbackType || "application/octet-stream";
     }
 
-    // باز کردن صحیح فایل‌های HTML و سایر مستندات با پشتیبانی کامل از UTF-8
+    // باز کردن فایل‌های پیوست با رمزگشایی صحیح UTF-8 و تزریق فونت فارسی وزیرمتن
     async function openAttachmentProperly(att, forceDownload = false) {
       const rawUrl = att.url || att.dataUrl;
       if (!rawUrl) return;
@@ -71,43 +85,73 @@
       const mime = getMimeType(att.name, att.type);
 
       try {
-        // اگر فایل DataURL (Base64) باشد
-        if (rawUrl.startsWith("data:")) {
-          const res = await fetch(rawUrl);
-          const buf = await res.arrayBuffer();
-          const blob = new Blob([buf], { type: mime });
-          const blobUrl = URL.createObjectURL(blob);
-          if (forceDownload) {
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = att.name || "file";
-            a.click();
+        const res = await fetch(rawUrl);
+        const buf = await res.arrayBuffer();
+
+        if (isHtml && !forceDownload) {
+          let htmlText = new TextDecoder("utf-8").decode(buf);
+
+          // استایل رفع فاصله بین ارقام فارسی و اعمال فونت وزیرمتن
+          const vazirFixStyle = `
+            <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
+            <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Misc/Farsi-Digits/Vazirmatn-FD-font-face.css" rel="stylesheet" />
+            <style>
+              :root, html[lang="fa"], html[dir="rtl"] {
+                --fa: 'Vazirmatn FD', 'Vazirmatn', system-ui, sans-serif !important;
+                --body: 'Vazirmatn FD', 'Vazirmatn', system-ui, sans-serif !important;
+                --display: 'Vazirmatn FD', 'Vazirmatn', system-ui, sans-serif !important;
+              }
+              html[lang="fa"] body, html[dir="rtl"] body {
+                font-family: 'Vazirmatn FD', 'Vazirmatn', system-ui, sans-serif !important;
+                text-align: right;
+                line-height: 1.9 !important;
+                letter-spacing: 0 !important;
+              }
+              html[lang="fa"] .stat b,
+              html[lang="fa"] .mx .y,
+              html[lang="fa"] .mx .sc,
+              html[lang="fa"] .yr,
+              html[lang="fa"] .stream i,
+              html[lang="fa"] ol.path li::before {
+                font-family: 'Vazirmatn FD', 'Vazirmatn', monospace, sans-serif !important;
+                letter-spacing: 0 !important;
+                font-weight: 700 !important;
+                font-variant-numeric: normal !important;
+              }
+              html[lang="fa"] p, html[lang="fa"] dd, html[lang="fa"] li {
+                text-align: justify;
+                text-justify: inter-word;
+              }
+              html[lang="fa"] h1, html[lang="fa"] h2, html[lang="fa"] h3 {
+                font-family: 'Vazirmatn FD', 'Vazirmatn', sans-serif !important;
+                letter-spacing: 0 !important;
+              }
+            </style>
+          `;
+
+          if (htmlText.includes("</head>")) {
+            htmlText = htmlText.replace("</head>", vazirFixStyle + "</head>");
           } else {
-            window.open(blobUrl, "_blank");
+            htmlText = vazirFixStyle + htmlText;
           }
+
+          const blob = new Blob([htmlText], { type: "text/html;charset=utf-8" });
+          const blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, "_blank");
           return;
         }
 
-        // اگر فایل HTML یا متنی روی Supabase Storage باشد یا کاربر دانلود بخواهد
-        if (isHtml || forceDownload) {
-          const res = await fetch(rawUrl);
-          const buf = await res.arrayBuffer();
-          const blob = new Blob([buf], { type: mime });
-          const blobUrl = URL.createObjectURL(blob);
+        const blob = new Blob([buf], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
 
-          if (forceDownload) {
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = att.name || "file";
-            a.click();
-          } else {
-            window.open(blobUrl, "_blank");
-          }
-          return;
+        if (forceDownload) {
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = att.name || "file";
+          a.click();
+        } else {
+          window.open(blobUrl, "_blank");
         }
-
-        // سایر فایل‌ها (PDF، تصویر و...) در تب جدید باز شوند
-        window.open(rawUrl, "_blank");
       } catch (e) {
         window.open(rawUrl, "_blank");
       }
@@ -172,10 +216,10 @@
       return new Date().toISOString().slice(0, 10);
     }
 
-    // آپلود فایل با تعیین دقیق Content-Type
+    // آپلود فایل در فضای ابری Supabase Storage
     async function uploadAttachmentFile(file) {
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error("حجم فایل بیشتر از ۲۵ مگابایت است.");
+        throw new Error("حجم فایل بیشتر از سقف مجاز (۲۵ مگابایت) است.");
       }
 
       const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
@@ -203,8 +247,9 @@
         };
       }
 
+      // در صورت آماده نبودن باکت، فایل‌های تا ۵ مگابایت به صورت DataURL در دیتابیس ثبت می‌شوند
       if (file.size > 5 * 1024 * 1024) {
-        throw new Error("برای فایل‌های بالای ۵ مگابایت، لطفاً کد SQL ساخت باکت thesis-files را در Supabase اجرا کنید.");
+        throw new Error("برای آپلود فایل‌های بالای ۵ مگابایت، باکت thesis-files را در Supabase فعال کنید.");
       }
 
       return new Promise((resolve, reject) => {
@@ -219,51 +264,13 @@
             addedAt: new Date().toISOString()
           });
         };
-        reader.onerror = () => reject(new Error("خطا در خواندن فایل"));
+        reader.onerror = () => reject(new Error("خطا در پردازش فایل"));
         reader.readAsDataURL(file);
       });
     }
 
     // -------------------------------------------------------------------------
-    // کامپوننت نمایش دکمه مشاهده و دانلود هر فایل پیوست
-    // -------------------------------------------------------------------------
-    function AttachmentChip({ att, onRemove }) {
-      const isHtml = /\.(html|htm)$/i.test(att.name || "");
-      return (
-        <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-1.5 text-xs shadow-sm">
-          <button
-            type="button"
-            onClick={() => openAttachmentProperly(att, false)}
-            className="font-bold text-indigo-700 hover:text-indigo-900 hover:underline truncate max-w-[15rem] text-right"
-            title={isHtml ? "مشاهده صفحه وب تعاملی در تب جدید" : "مشاهده فایل"}
-          >
-            {isHtml ? "🌐 " : "📄 "}{att.name}
-          </button>
-          {att.size && <span className="text-[10px] text-slate-400">({formatFileSize(att.size)})</span>}
-          <button
-            type="button"
-            onClick={() => openAttachmentProperly(att, true)}
-            className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200"
-            title="دانلود مستقیم فایل"
-          >
-            ⬇️ دانلود
-          </button>
-          {onRemove && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="text-rose-400 hover:text-rose-600 font-bold mr-0.5"
-              title="حذف فایل"
-            >
-              ✖
-            </button>
-          )}
-        </div>
-      );
-    }
-
-    // -------------------------------------------------------------------------
-    // داده‌های اولیه پیش‌فرض
+    // داده‌های پیش‌فرض سامانه
     // -------------------------------------------------------------------------
     function getInitialData() {
       const addDays = (d) => {
@@ -274,7 +281,7 @@
       const s1Id = "session-1-init";
       return {
         meta: {
-          title: "گزارش کار پایان‌نامه",
+          title: "گزارش کار و هدایت پایان‌نامه",
           student: "سید صادق میرزابابایی",
           advisor: "استاد راهنما",
           startDate: addDays(-30),
@@ -304,7 +311,7 @@
         ],
         chapters: [
           { id: "ch-1", title: "فصل اول: کلیات پژوهش", progress: 0, wordTarget: 4000, wordCount: 0, status: "شروع نشده", notes: "" },
-          { id: "ch-2", title: "فصل دوم: مبانی نظری و پیشینه", progress: 0, wordTarget: 8000, wordCount: 0, status: "شروع نشده", notes: "" },
+          { id: "ch-2", title: "فصل دوم: مبانی نظری و پیشینه پژوهش", progress: 0, wordTarget: 8000, wordCount: 0, status: "شروع نشده", notes: "" },
           { id: "ch-3", title: "فصل سوم: روش‌شناسی و مدل‌سازی", progress: 0, wordTarget: 5000, wordCount: 0, status: "شروع نشده", notes: "" },
           { id: "ch-4", title: "فصل چهارم: تجزیه و تحلیل یافته‌ها", progress: 0, wordTarget: 6000, wordCount: 0, status: "شروع نشده", notes: "" },
           { id: "ch-5", title: "فصل پنجم: نتیجه‌گیری و پیشنهادات", progress: 0, wordTarget: 3000, wordCount: 0, status: "شروع نشده", notes: "" }
@@ -316,30 +323,30 @@
             done: false,
             children: [
               { id: "fw-1-1", title: "مقدمه و بیان مسئله", done: true, children: [] },
-              { id: "fw-1-2", title: "اهداف و سوالات پژوهش", done: true, children: [] },
-              { id: "fw-1-3", title: "مرور ادبیات و پیشینه پژوهش", done: false, children: [] },
-              { id: "fw-1-4", title: "مدل‌سازی ریاضی / روش تحقیق", done: false, children: [] }
+              { id: "fw-1-2", title: "اهداف و سوالات اصلی پژوهش", done: true, children: [] },
+              { id: "fw-1-3", title: "مرور ساختاریافته ادبیات موضوع", done: false, children: [] },
+              { id: "fw-1-4", title: "مدل‌سازی و روش حل مسئله", done: false, children: [] }
             ]
           }
         ],
         notes: [
-          { id: "note-1", title: "ایده‌های تکمیلی", content: "بررسی امکان افزودن یک مطالعه موردی واقعی در فصل چهارم.", tag: "ایده", pinned: true, updatedAt: new Date().toISOString() }
+          { id: "note-1", title: "ایده‌های تکمیلی", content: "امکان افزودن یک مطالعه موردی واقعی در فصل چهارم با داده‌های صنعتی بررسی شود.", tag: "ایده", pinned: true, updatedAt: new Date().toISOString() }
         ],
         milestones: [
-          { id: "ms-1", title: "تصویب پروپوزال", date: addDays(-20), done: true, description: "" },
-          { id: "ms-2", title: "تحویل فصل اول و دوم", date: addDays(25), done: false, description: "" },
-          { id: "ms-3", title: "مدل‌سازی و تحویل فصل سوم", date: addDays(65), done: false, description: "" },
-          { id: "ms-4", title: "تکمیل نسخه نهایی", date: addDays(130), done: false, description: "" },
-          { id: "ms-5", title: "جلسه دفاع", date: addDays(150), done: false, description: "" }
+          { id: "ms-1", title: "تصویب نهایی پروپوزال", date: addDays(-20), done: true, description: "" },
+          { id: "ms-2", title: "تحویل پیش‌نویس فصل اول و دوم", date: addDays(25), done: false, description: "" },
+          { id: "ms-3", title: "تکمیل مدل‌سازی و فصل سوم", date: addDays(65), done: false, description: "" },
+          { id: "ms-4", title: "تحویل نسخه نهایی پایان‌نامه", date: addDays(130), done: false, description: "" },
+          { id: "ms-5", title: "جلسه دفاع رسمی", date: addDays(150), done: false, description: "" }
         ],
         defense: {
           date: addDays(150),
           location: "سالن دفاعیه دانشکده",
           checklist: [
-            { id: "df-1", title: "تکمیل اسلایدهای ارائه دفاع", done: false },
-            { id: "df-2", title: "هماهنگی تاریخ با استاد راهنما و داوران", done: false },
-            { id: "df-3", title: "دفاع آزمایشی (دمو)", done: false },
-            { id: "df-4", title: "آماده‌سازی چکیده فارسی و انگلیسی", done: false }
+            { id: "df-1", title: "تکمیل اسلایدهای ارائه جلسه دفاع", done: false },
+            { id: "df-2", title: "هماهنگی روز و ساعت با اساتید راهنما و داور", done: false },
+            { id: "df-3", title: "اجرای آزمایشی و مدیریت زمان ارائه", done: false },
+            { id: "df-4", title: "آماده‌سازی نسخه چاپی و چکیده فارسی و انگلیسی", done: false }
           ],
           committee: [],
           notes: ""
@@ -357,7 +364,7 @@
       const maxYear = Math.max(todayParts[0] + 5, currentParts[0] || todayParts[0]);
 
       const selectClass = dark
-        ? "min-w-0 w-full rounded-xl border border-white/30 bg-white/10 px-2 py-2 text-xs md:text-sm text-white outline-none [&>option]:bg-white [&>option]:text-slate-800"
+        ? "min-w-0 w-full rounded-xl border border-white/30 bg-white/10 px-2 py-2 text-xs md:text-sm text-white outline-none [&>option]:bg-slate-800 [&>option]:text-white"
         : "min-w-0 w-full rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs md:text-sm text-slate-800 outline-none focus:border-indigo-500";
 
       const handlePartChange = (index, val) => {
@@ -399,14 +406,52 @@
     }
 
     // -------------------------------------------------------------------------
-    // مدیریت وضعیت برنامه + همگام‌سازی زنده با Supabase
+    // کامپوننت دکمه مشاهده و دانلود هر فایل پیوست
+    // -------------------------------------------------------------------------
+    function AttachmentChip({ att, onRemove }) {
+      const isHtml = /\.(html|htm)$/i.test(att.name || "");
+      return (
+        <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-1.5 text-xs shadow-sm">
+          <button
+            type="button"
+            onClick={() => openAttachmentProperly(att, false)}
+            className="font-bold text-indigo-700 hover:text-indigo-950 hover:underline truncate max-w-[15rem] text-right"
+            title={isHtml ? "مشاهده سند تعاملی با فونت وزیر در تب جدید" : "مشاهده فایل"}
+          >
+            {isHtml ? "🌐 " : "📄 "}{att.name}
+          </button>
+          {att.size && <span className="text-[10px] text-slate-400">({formatFileSize(att.size)})</span>}
+          <button
+            type="button"
+            onClick={() => openAttachmentProperly(att, true)}
+            className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200"
+            title="دانلود مستقیم روی دستگاه"
+          >
+            ⬇️ دانلود
+          </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-rose-400 hover:text-rose-600 font-bold mr-0.5"
+              title="حذف فایل"
+            >
+              ✖
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // کانتکست مشترک برنامه و اتصال بلادرنگ به Supabase
     // -------------------------------------------------------------------------
     const AppContext = createContext(null);
 
     function AppProvider({ children, user, onLogout }) {
       const [store, setStore] = useState(() => {
         try {
-          const cached = localStorage.getItem("thesis_full_cache_v3");
+          const cached = localStorage.getItem("thesis_full_cache_v4");
           return cached ? JSON.parse(cached) : getInitialData();
         } catch {
           return getInitialData();
@@ -447,7 +492,7 @@
 
           if (data && data.data) {
             setStore(data.data);
-            localStorage.setItem("thesis_full_cache_v3", JSON.stringify(data.data));
+            localStorage.setItem("thesis_full_cache_v4", JSON.stringify(data.data));
             setSyncStatus("live");
           } else {
             const initial = getInitialData();
@@ -466,7 +511,7 @@
           .on("postgres_changes", { event: "*", schema: "public", table: "thesis_store", filter: "id=eq.main" }, payload => {
             if (payload.new && payload.new.data) {
               setStore(payload.new.data);
-              localStorage.setItem("thesis_full_cache_v3", JSON.stringify(payload.new.data));
+              localStorage.setItem("thesis_full_cache_v4", JSON.stringify(payload.new.data));
               setSyncStatus("live");
             }
           })
@@ -481,7 +526,7 @@
       const updateStore = (updater) => {
         setStore(prev => {
           const next = typeof updater === "function" ? updater(prev) : updater;
-          localStorage.setItem("thesis_full_cache_v3", JSON.stringify(next));
+          localStorage.setItem("thesis_full_cache_v4", JSON.stringify(next));
 
           if (!isInitialLoad.current) {
             setSyncStatus("saving");
@@ -543,11 +588,11 @@
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-4 mb-4">
               <div>
                 <input
-                  value={store.meta?.title || "گزارش کار پایان‌نامه"}
+                  value={store.meta?.title || "گزارش کار و هدایت پایان‌نامه"}
                   onChange={e => updateStore(s => ({ ...s, meta: { ...s.meta, title: e.target.value } }))}
                   className="bg-transparent text-lg md:text-xl font-extrabold text-white outline-none border-b border-transparent focus:border-white/40"
                 />
-                <div className="flex flex-wrap gap-4 mt-1 text-xs text-indigo-200">
+                <div className="flex flex-wrap gap-4 mt-2 text-xs text-indigo-200">
                   <label className="flex items-center gap-1">
                     <span>پژوهشگر:</span>
                     <input
@@ -609,7 +654,7 @@
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             <div className="space-y-6 lg:col-span-2">
-              {[["وظایف من (دانشجو)", myOpenActions], ["موارد مرتبط با استاد راهنما", profOpenActions]].map(([title, list]) => (
+              {[["وظایف من (دانشجو)", myOpenActions], ["اقدامات استاد راهنما", profOpenActions]].map(([title, list]) => (
                 <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <h3 className="mb-3 flex items-center justify-between text-sm font-bold text-slate-800">
                     <span>{title}</span>
@@ -618,7 +663,7 @@
                     </span>
                   </h3>
                   {list.length === 0 ? (
-                    <p className="text-xs text-slate-400">مورد بازی وجود ندارد.</p>
+                    <p className="text-xs text-slate-400">مورد بازی ثبت نشده است.</p>
                   ) : (
                     <ul className="space-y-2">
                       {list.map(act => (
@@ -632,7 +677,7 @@
                               {act.dueDate && <span className="text-[11px] text-slate-400">مهلت: {formatJalali(act.dueDate)}</span>}
                               {(act.attachments?.length > 0) && (
                                 <span className="text-[11px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
-                                  📎 {toFaDigits(act.attachments.length)} فایل
+                                  📎 {toFaDigits(act.attachments.length)} فایل ضمیمه
                                 </span>
                               )}
                             </div>
@@ -652,7 +697,7 @@
                   مشاهده و ویرایش فصول
                 </button>
               </div>
-              <p className="mb-4 text-xs text-slate-400">میانگین پیشرفت کلی: {toFaDigits(chapterPct)}٪</p>
+              <p className="mb-4 text-xs text-slate-400">میانگین پیشرفت کل: {toFaDigits(chapterPct)}٪</p>
               <ul className="space-y-3.5">
                 {store.chapters.map(ch => (
                   <li key={ch.id}>
@@ -673,7 +718,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // ۲. بخش جلسات با استاد راهنما + بارگذاری و اجرای صحیح فایل‌ها
+    // ۲. بخش جلسات و اقدامات (Sessions)
     // -------------------------------------------------------------------------
     function SessionsView({ onOpenResponse, highlightId, clearHighlight }) {
       const { store, updateStore, toast } = useApp();
@@ -717,7 +762,7 @@
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-slate-500">
-              هر جلسه یک گزارش کامل است: خلاصه، پیگیری جلسه قبل، سوالات، تصمیم‌ها، بازخورد استاد و بارگذاری فایل برای تکالیف.
+              ثبت صورت‌جلسات، پیگیری مصوبات جلسه قبل، ثبت فیدبک استاد و پیوست فایل‌های پژوهش.
             </p>
             <button
               onClick={addNewSession}
@@ -854,7 +899,7 @@
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 transition"
-                title="پیوست فایل (HTML، PDF، Word، کد، تصویر...)"
+                title="پیوست فایل (HTML تعاملی، PDF، Word، کد، تصویر...)"
               >
                 <span>📎 {uploading ? "در حال آپلود..." : "بارگذاری فایل"}</span>
               </button>
@@ -1069,15 +1114,41 @@
                 </div>
               </div>
 
+              {/* لینک فایل یا مخزن کدهای جلسه */}
+              <div className="mt-4">
+                <span className="mb-1 block text-xs font-semibold text-slate-500">لینک فایل / مقاله / پیش‌نویس ارائه‌شده در این جلسه (Google Drive, Overleaf...)</span>
+                <div className="flex gap-2">
+                  <input
+                    dir="ltr"
+                    type="url"
+                    value={session.fileLink || ""}
+                    onChange={e => updateField({ fileLink: e.target.value })}
+                    placeholder="https://drive.google.com/..."
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                  {session.fileLink && (
+                    <a
+                      href={session.fileLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 rounded-xl bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 flex items-center"
+                    >
+                      مشاهده لینک ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+
               <SectionBanner title="خلاصه مباحث و گزارش جلسه" tone="from-indigo-700 to-indigo-800" />
               <textarea
                 rows={5}
                 value={session.summary}
                 onChange={e => updateField({ summary: e.target.value })}
-                placeholder="در این جلسه چه مباحثی مطرح شد؟"
+                placeholder="شرح کارهای انجام‌گرفته و مباحث مطرح‌شده در جلسه..."
                 className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
               />
 
+              {/* پیگیری جلسه قبل */}
               {prev && (
                 <>
                   <SectionBanner title="اقدامات انجام‌شده از جلسه قبل" count={prevDone.length} tone="from-teal-700 to-teal-800" />
@@ -1100,6 +1171,7 @@
                 </>
               )}
 
+              {/* تصمیمات و بازخورد استاد */}
               <SectionBanner title="تصمیم‌ها و موارد توافق‌شده" tone="from-indigo-600 to-indigo-700" />
               <textarea
                 rows={2}
@@ -1118,6 +1190,7 @@
                 className="w-full rounded-xl border border-amber-200 bg-amber-50/30 p-3 text-sm leading-7 outline-none focus:border-indigo-500"
               />
 
+              {/* سوالات جلسه */}
               <SectionBanner title="سوالات و ابهامات مطرح‌شده" count={questions.length} tone="from-slate-500 to-slate-600" />
               <div className="space-y-3">
                 {questions.map(q => (
@@ -1168,6 +1241,7 @@
                 </div>
               </div>
 
+              {/* اقدامات و تکالیف تا جلسه بعد */}
               <SectionBanner title="اقداماتی که باید تا جلسه بعد انجام شود (به همراه بارگذاری فایل)" count={sessionActions.length} tone="from-indigo-700 to-indigo-800" />
               {sessionActions.length > 0 && (
                 <ul className="mb-4 space-y-2.5">
@@ -1177,6 +1251,7 @@
                 </ul>
               )}
 
+              {/* فرم افزودن اقدام جدید به همراه آپلود فایل */}
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-3">
                 <input
                   value={newActTitle}
@@ -1188,11 +1263,10 @@
                 {newActFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {newActFiles.map(f => (
-                      <AttachmentChip
-                        key={f.id}
-                        att={f}
-                        onRemove={() => setNewActFiles(prev => prev.filter(x => x.id !== f.id))}
-                      />
+                      <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-indigo-200 px-2.5 py-1 text-xs text-indigo-700">
+                        📄 {f.name} ({formatFileSize(f.size)})
+                        <button onClick={() => setNewActFiles(prev => prev.filter(x => x.id !== f.id))} className="text-rose-500 font-bold">✖</button>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -1234,6 +1308,7 @@
                 </div>
               </div>
 
+              {/* فایل‌های پیوست کل جلسه */}
               <SectionBanner title="فایل‌های پیوست و مستندات جلسه" count={sessionAttachments.length} tone="from-slate-500 to-slate-600" />
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1606,7 +1681,7 @@
       return (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">ایده‌ها، لینک مقالات و نکات مهم پژوهشی را اینجا ثبت کنید.</p>
+            <p className="text-sm text-slate-500">ایده‌ها، نکات مقالات و خلاصه‌های مهم را اینجا ثبت کنید.</p>
             <button
               onClick={() => setOpenNew(!openNew)}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -1720,7 +1795,7 @@
       return (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">مهلت‌ها و نقاط عطف کلیدی پایان‌نامه را در تقویم شمسی مدیریت کنید.</p>
+            <p className="text-sm text-slate-500">مهلت‌ها و ددلاین‌های کلیدی را به تاریخ شمسی ثبت و پیگیری کنید.</p>
             <button
               onClick={() => setOpenAdd(!openAdd)}
               className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -1850,7 +1925,7 @@
                 />
               </label>
             </div>
-            <p className="mt-3 text-xs text-indigo-300">تاریخ انتخابی: {formatJalali(defense.date)}</p>
+            <p className="mt-3 text-xs text-indigo-300">تاریخ ثبت‌شده: {formatJalali(defense.date)}</p>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -2064,7 +2139,7 @@
                 </button>
                 <input ref={fileRef} type="file" className="hidden" onChange={handleUploadInModal} />
               </div>
-              <p className="mb-2 text-[11px] text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت (فایل‌های HTML به صورت صفحه وب کامل باز می‌شوند)</p>
+              <p className="mb-2 text-[11px] text-slate-400">حداکثر حجم مجاز هر فایل: ۲۵ مگابایت (فایل‌های HTML به صورت وب‌سایت کامل باز می‌شوند)</p>
 
               {attachments.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-400">
@@ -2355,7 +2430,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // کامپوننت ریشه و صفحه لاگین
+    // صفحه ورود و اعتبارسنجی
     // -------------------------------------------------------------------------
     function RootApp() {
       const [user, setUser] = useState(null);
